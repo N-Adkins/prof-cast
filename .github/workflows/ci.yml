@@ -146,9 +146,12 @@ jobs:
         run: cargo binstall --no-confirm cbindgen
 
       - name: Generate C header
-        run: cbindgen crates/profcast-ffi --config cbindgen.toml --output /tmp/profcast.h
+        run: make header
 
-      - name: Check generated header
+      - name: Check generated header is committed
+        run: make check-header
+
+      - name: Check generated header is trivially valid
         run: |
           test -s /tmp/profcast.h
           grep -q "profcast_version" /tmp/profcast.h
