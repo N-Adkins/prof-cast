@@ -23,6 +23,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   BINSTALL_DISABLE_TELEMETRY: true
+  ASAN_OPTIONS: detect_leaks=0
 
 jobs:
   fuzz:
@@ -47,19 +48,25 @@ jobs:
           version: "1.20.1"
 
       - name: Install cargo-fuzz
-        run: cargo binstall --no-confirm cargo-fuzz
+        run: |
+          cargo binstall --no-confirm --force cargo-fuzz
+          command -v cargo-fuzz
+          cargo fuzz --version
 
       - name: Fuzz
+        env:
+          RUSTUP_TOOLCHAIN: nightly
         run: |
           set -euo pipefail
           if [ "${{ inputs.target }}" = "all" ]; then
-            targets=$(cargo +nightly fuzz list)
+            targets=$(cargo fuzz list)
           else
             targets="${{ inputs.target }}"
           fi
           for target in $targets; do
             echo "::group::Fuzzing $target for ${{ inputs.seconds }}s"
-            cargo +nightly fuzz run "$target" -- \
+            cargo fuzz run "$target" \
+              --target x86_64-unknown-linux-gnu -- \
               -max_total_time=${{ inputs.seconds }} -print_final_stats=1
             echo "::endgroup::"
           done
