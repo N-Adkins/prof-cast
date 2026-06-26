@@ -34,9 +34,7 @@ mod test {
     #[test]
     fn version_is_correct() -> Result<()> {
         // SAFETY: needed to consume c pointer for test
-        let ffi_cstr = unsafe {
-            CStr::from_ptr(profcast_version()) 
-        }.to_str()?;
+        let ffi_cstr = unsafe { CStr::from_ptr(profcast_version()) }.to_str()?;
         assert_eq!(ffi_cstr, profcast_core::VERSION_STRING);
         Ok(())
     }
