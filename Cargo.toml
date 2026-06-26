@@ -6,6 +6,7 @@ members = [
     "crates/profcast-ffi",
     "crates/profcast-formats",
 ]
+
 # The fuzz crate is its own cargo-fuzz workspace; it pulls in nightly-only
 # sanitizer flags and must not be built as part of the normal workspace.
 exclude = ["fuzz"]
@@ -14,8 +15,8 @@ exclude = ["fuzz"]
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0 OR MIT"
-repository = "https://github.com/N-Adkins/prof-cast"
-homepage = "https://github.com/N-Adkins/prof-cast"
+repository = "https://github.com/N-Adkins/profcast"
+homepage = "https://github.com/N-Adkins/profcast"
 readme = "README.md"
 keywords = ["profiling", "pprof", "perf", "observability"]
 categories = ["development-tools::profiling", "command-line-utilities"]
