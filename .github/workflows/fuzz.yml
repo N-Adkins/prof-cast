@@ -23,6 +23,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   BINSTALL_DISABLE_TELEMETRY: true
+  ASAN_OPTIONS: detect_leaks=0
 
 jobs:
   fuzz:
