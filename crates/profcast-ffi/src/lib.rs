@@ -28,12 +28,15 @@ mod test {
 
     #[test]
     fn version_is_nonnull() {
-        assert_ne!(profcast_version(), std::ptr::null_mut())
+        assert_ne!(profcast_version(), std::ptr::null_mut());
     }
 
     #[test]
     fn version_is_correct() -> Result<()> {
-        let ffi_cstr = unsafe { CStr::from_ptr(profcast_version()) }.to_str()?;
+        // SAFETY: needed to consume c pointer for test
+        let ffi_cstr = unsafe {
+            CStr::from_ptr(profcast_version()) 
+        }.to_str()?;
         assert_eq!(ffi_cstr, profcast_core::VERSION_STRING);
         Ok(())
     }

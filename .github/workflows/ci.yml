@@ -16,6 +16,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  BINSTALL_DISABLE_TELEMETRY: true
 
 jobs:
   fmt:
@@ -82,6 +83,27 @@ jobs:
       - name: Test
         run: cargo test --workspace --all-features --locked
 
+  miri:
+    name: Miri
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Miri
+        run: rustup toolchain install nightly --profile minimal --component miri
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Set up Miri
+        run: cargo +nightly miri setup
+
+      - name: Run tests under Miri
+        run: cargo +nightly miri test --workspace --all-features --locked
+
   no-default-features:
     name: No default features
     runs-on: ubuntu-latest
@@ -115,8 +137,13 @@ jobs:
         with:
           cache-on-failure: true
 
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.20.1
+        with:
+          version: "1.20.1"
+
       - name: Install cbindgen
-        run: cargo install --locked cbindgen
+        run: cargo binstall --no-confirm cbindgen
 
       - name: Generate C header
         run: cbindgen crates/profcast-ffi --config cbindgen.toml --output /tmp/profcast.h
