@@ -1,0 +1,23 @@
+[package]
+name = "profcast-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "CLI for transcoding profiling data with profcast"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "profcast"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+profcast-core = { path = "../profcast-core" }

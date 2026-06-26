@@ -1,0 +1,8 @@
+language = "C"
+include_guard = "PROFCAST_H"
+style = "tag"
+documentation = true
+usize_is_size_t = true
+
+[export]
+prefix = "profcast_"
