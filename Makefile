@@ -6,9 +6,15 @@ header:
 check-header: header
 	git diff --exit-code include/profcast.h
 
-# Fuzzing. Requires a nightly toolchain and cargo-fuzz (`make fuzz-install`).
-# Run a target with `make fuzz t=folded_read`. Optionally time-box a run with
-# `make fuzz t=folded_read secs=120`; without `secs` it runs until you Ctrl-C.
+.PHONY: miri-setup
+miri-setup:
+	rustup toolchain install nightly --profile minimal --component miri
+	cargo +nightly miri setup
+
+.PHONY: miri
+miri:
+	cargo +nightly miri test --workspace --all-features --locked
+
 .PHONY: fuzz-install
 fuzz-install:
 	cargo install cargo-fuzz
