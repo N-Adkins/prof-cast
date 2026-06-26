@@ -1,0 +1,36 @@
+[package]
+name = "profcast-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+profcast-core = { path = "../crates/profcast-core" }
+profcast-formats = { path = "../crates/profcast-formats" }
+
+# Keep debug info in fuzz builds so crashes symbolize nicely.
+[profile.release]
+debug = true
+
+[lib]
+name = "profcast_fuzz"
+path = "src/lib.rs"
+
+[[bin]]
+name = "folded_probe"
+path = "fuzz_targets/folded_probe.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "folded_read"
+path = "fuzz_targets/folded_read.rs"
+test = false
+doc = false
+bench = false

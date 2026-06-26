@@ -1,5 +1,5 @@
 [package]
-name = "profcast-cli"
+name = "profcast-formats"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,20 +8,11 @@ homepage.workspace = true
 readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "CLI for transcoding profiling data with profcast"
+description = "Format specifications for different profiler output schemes"
 
 [lints]
 workspace = true
 
-[[bin]]
-name = "profcast"
-path = "src/main.rs"
-
 [dependencies]
-anyhow.workspace = true
-clap.workspace = true
-serde_json.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
 profcast-core = { path = "../profcast-core" }
-profcast-formats = { path = "../profcast-formats" }

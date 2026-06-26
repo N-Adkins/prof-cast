@@ -207,6 +207,8 @@ dependencies = [
  "anyhow",
  "clap",
  "profcast-core",
+ "profcast-formats",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
 ]
@@ -227,6 +229,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "profcast-core",
+ "profcast-formats",
+ "serde_json",
+]
+
+[[package]]
+name = "profcast-formats"
+version = "0.1.0"
+dependencies = [
+ "profcast-core",
+ "tracing",
 ]
 
 [[package]]

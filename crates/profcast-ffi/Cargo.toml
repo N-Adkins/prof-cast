@@ -18,7 +18,9 @@ name = "profcast_ffi"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
+serde_json.workspace = true
 profcast-core = { path = "../profcast-core" }
+profcast-formats = { path = "../profcast-formats" }
 
 [dev-dependencies]
 anyhow.workspace = true

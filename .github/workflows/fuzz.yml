@@ -1,0 +1,73 @@
+name: Fuzz
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Fuzz target to run ("all" runs every target)'
+        type: string
+        default: "all"
+      seconds:
+        description: "How long to fuzz each target, in seconds"
+        type: string
+        default: "120"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  BINSTALL_DISABLE_TELEMETRY: true
+
+jobs:
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install nightly Rust
+        run: rustup toolchain install nightly --profile minimal
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+          cache-on-failure: true
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.20.1
+        with:
+          version: "1.20.1"
+
+      - name: Install cargo-fuzz
+        run: cargo binstall --no-confirm cargo-fuzz
+
+      - name: Fuzz
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.target }}" = "all" ]; then
+            targets=$(cargo +nightly fuzz list)
+          else
+            targets="${{ inputs.target }}"
+          fi
+          for target in $targets; do
+            echo "::group::Fuzzing $target for ${{ inputs.seconds }}s"
+            cargo +nightly fuzz run "$target" -- \
+              -max_total_time=${{ inputs.seconds }} -print_final_stats=1
+            echo "::endgroup::"
+          done
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore

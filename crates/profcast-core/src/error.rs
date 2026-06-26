@@ -7,6 +7,7 @@ pub type Result<T> = std::result::Result<T, ProfcastError>;
 
 /// Errors returned by profcast operations
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ProfcastError {
     /// An I/O operation failed
     #[error("I/O error: {0}")]
@@ -15,4 +16,22 @@ pub enum ProfcastError {
     /// A JSON operation failed
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+
+    /// Input bytes were not valid UTF-8 text
+    #[error("invalid UTF-8: {0}")]
+    Utf8(#[from] std::str::Utf8Error),
+
+    /// A [`Profile`](crate::model::Profile) could not be parsed from its input
+    #[error("parse error on line {line}: {message}")]
+    Parse {
+        /// 1-based line number where parsing failed
+        line: usize,
+        /// Human-readable description of what went wrong
+        message: String,
+    },
+
+    /// A [`Profile`](crate::model::Profile) violated the data model's
+    /// structural invariants
+    #[error("invalid profile: {0}")]
+    InvalidProfile(String),
 }

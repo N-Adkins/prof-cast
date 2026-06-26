@@ -1,6 +1,8 @@
 //! Core data types and shared APIs for profcast
 
 pub mod error;
+pub mod format;
+pub mod model;
 
 pub use error::{ProfcastError, Result};
 
