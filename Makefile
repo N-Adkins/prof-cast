@@ -23,10 +23,10 @@ fuzz-list:
 
 .PHONY: fuzz
 fuzz:
-	@if [ -z "$(t)" ]; then \
-		echo "Usage: make fuzz t=<target> [secs=<seconds>]"; \
+	@if [ -z "$(target)" ]; then \
+		echo "Usage: make fuzz target=<target> [secs=<seconds>]"; \
 		echo "Available targets:"; \
 		cargo +nightly fuzz list; \
 		exit 2; \
 	fi
-	cargo +nightly fuzz run $(t) $(if $(secs),-- -max_total_time=$(secs))
+	cargo +nightly fuzz run $(target) $(if $(secs),-- -max_total_time=$(secs))

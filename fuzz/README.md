@@ -15,6 +15,8 @@ toolchain and sanitizer flags), so it has its own `Cargo.toml` and lock file.
   - `folded_read` — feeds raw bytes to `FoldedFormat::read`.
   - `folded_probe` — feeds an arbitrary `(filename, bytes)` pair to
     `FoldedFormat::probe`.
+  - `c_api` — drives the exported C ABI with C-style buffers/strings,
+    null handles, JSON serialization, and ownership cleanup.
 
 ## Running
 
@@ -23,6 +25,7 @@ make fuzz-install              # one-time: cargo install cargo-fuzz
 cargo fuzz list                # show available targets
 make fuzz t=folded_read        # or: cargo +nightly fuzz run folded_read
 make fuzz t=folded_probe
+make fuzz t=c_api
 ```
 
 ## Adding a format
