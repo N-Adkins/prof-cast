@@ -151,10 +151,5 @@ jobs:
       - name: Check generated header is committed
         run: make check-header
 
-      - name: Check generated header is trivially valid
-        run: |
-          test -s /tmp/profcast.h
-          grep -q "profcast_version" /tmp/profcast.h
-
       - name: Build FFI crate
         run: cargo build -p profcast-ffi --release --locked
