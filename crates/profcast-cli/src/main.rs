@@ -3,6 +3,7 @@
 //! CLI for profcast
 
 use clap::{Parser, Subcommand};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(name = "profcast")]
@@ -10,6 +11,8 @@ use clap::{Parser, Subcommand};
 struct Cli {
     #[command(subcommand)]
     command: Command,
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
 }
 
 #[derive(Subcommand)]
@@ -26,8 +29,27 @@ enum Command {
     },
 }
 
+fn init_logging(verbose: u8) {
+    let default_level = match verbose {
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
+        _ => "trace",
+    };
+
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(default_level));
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .init();
+}
+
 fn main() {
     let cli = Cli::parse();
+
+    init_logging(cli.verbose);
 
     match cli.command {
         Command::Convert {
