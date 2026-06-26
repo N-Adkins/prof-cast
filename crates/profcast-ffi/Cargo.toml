@@ -14,7 +14,7 @@ description = "C ABI bindings for profcast"
 workspace = true
 
 [lib]
-name = "profcast"
+name = "profcast_ffi"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]

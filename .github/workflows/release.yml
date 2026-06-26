@@ -14,7 +14,7 @@ env:
 
 jobs:
   build:
-    name: Build ${{ matrix.artifact_name }}
+    name: Build ${{ matrix.archive_name }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -22,16 +22,19 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: profcast-linux-x86_64
-            binary_path: target/release/profcast
+            archive_name: profcast-linux-x86_64
+            cli_path: target/release/profcast
+            archive_ext: tar.gz
 
           - os: macos-latest
-            artifact_name: profcast-macos-aarch64
-            binary_path: target/release/profcast
+            archive_name: profcast-macos-aarch64
+            cli_path: target/release/profcast
+            archive_ext: tar.gz
 
           - os: windows-latest
-            artifact_name: profcast-windows-x86_64.exe
-            binary_path: target/release/profcast.exe
+            archive_name: profcast-windows-x86_64
+            cli_path: target/release/profcast.exe
+            archive_ext: zip
 
     steps:
       - uses: actions/checkout@v4
@@ -45,27 +48,77 @@ jobs:
           cache-on-failure: true
 
       - name: Build CLI
-        run: cargo build -p profcast --release --locked
+        run: cargo build -p profcast-cli --bin profcast --release --locked
 
-      - name: Package Unix binary
+      - name: Build C ABI library
+        run: cargo build -p profcast-ffi --release --locked
+
+      - name: Package Unix artifacts
         if: runner.os != 'Windows'
         run: |
-          mkdir -p dist
-          cp "${{ matrix.binary_path }}" "dist/${{ matrix.artifact_name }}"
-          chmod +x "dist/${{ matrix.artifact_name }}"
+          mkdir -p "dist/${{ matrix.archive_name }}/bin"
+          mkdir -p "dist/${{ matrix.archive_name }}/include"
+          mkdir -p "dist/${{ matrix.archive_name }}/lib"
 
-      - name: Package Windows binary
+          cp "${{ matrix.cli_path }}" "dist/${{ matrix.archive_name }}/bin/profcast"
+          chmod +x "dist/${{ matrix.archive_name }}/bin/profcast"
+
+          cp include/profcast.h "dist/${{ matrix.archive_name }}/include/profcast.h"
+
+          if [ -f target/release/libprofcast_ffi.a ]; then
+            cp target/release/libprofcast_ffi.a "dist/${{ matrix.archive_name }}/lib/libprofcast.a"
+          fi
+
+          if [ -f target/release/libprofcast_ffi.so ]; then
+            cp target/release/libprofcast_ffi.so "dist/${{ matrix.archive_name }}/lib/libprofcast.so"
+          fi
+
+          if [ -f target/release/libprofcast_ffi.dylib ]; then
+            cp target/release/libprofcast_ffi.dylib "dist/${{ matrix.archive_name }}/lib/libprofcast.dylib"
+          fi
+
+          cp LICENSE LICENSE-MIT LICENSE-APACHE "dist/${{ matrix.archive_name }}/"
+
+          tar -czf "dist/${{ matrix.archive_name }}.tar.gz" -C dist "${{ matrix.archive_name }}"
+
+      - name: Package Windows artifacts
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist
-          Copy-Item "${{ matrix.binary_path }}" "dist/${{ matrix.artifact_name }}"
+          New-Item -ItemType Directory -Force -Path "dist/${{ matrix.archive_name }}/bin"
+          New-Item -ItemType Directory -Force -Path "dist/${{ matrix.archive_name }}/include"
+          New-Item -ItemType Directory -Force -Path "dist/${{ matrix.archive_name }}/lib"
 
-      - name: Upload artifact
+          Copy-Item "${{ matrix.cli_path }}" "dist/${{ matrix.archive_name }}/bin/profcast.exe"
+          Copy-Item "include/profcast.h" "dist/${{ matrix.archive_name }}/include/profcast.h"
+
+          if (Test-Path "target/release/profcast_ffi.dll") {
+            Copy-Item "target/release/profcast_ffi.dll" "dist/${{ matrix.archive_name }}/bin/profcast.dll"
+          }
+
+          if (Test-Path "target/release/profcast_ffi.lib") {
+            Copy-Item "target/release/profcast_ffi.lib" "dist/${{ matrix.archive_name }}/lib/profcast.lib"
+          }
+
+          if (Test-Path "target/release/profcast_ffi.dll.lib") {
+            Copy-Item "target/release/profcast_ffi.dll.lib" "dist/${{ matrix.archive_name }}/lib/profcast.dll.lib"
+          }
+
+          Copy-Item "LICENSE" "dist/${{ matrix.archive_name }}/LICENSE"
+          Copy-Item "LICENSE-MIT" "dist/${{ matrix.archive_name }}/LICENSE-MIT"
+          Copy-Item "LICENSE-APACHE" "dist/${{ matrix.archive_name }}/LICENSE-APACHE"
+
+          Compress-Archive `
+            -Path "dist/${{ matrix.archive_name }}" `
+            -DestinationPath "dist/${{ matrix.archive_name }}.zip"
+
+      - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: dist/*
+          name: ${{ matrix.archive_name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
 
   github-release:
     name: Create GitHub release
@@ -81,5 +134,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/*
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
           generate_release_notes: true
