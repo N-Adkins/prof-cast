@@ -42,6 +42,7 @@ impl Registry {
     pub fn with_builtins() -> Self {
         let mut registry = Self::new();
         registry.register(Box::new(FoldedFormat));
+        registry.register_output(Box::new(FoldedFormat));
         registry.register_output(Box::new(JsonFormat));
         registry
     }
@@ -195,6 +196,7 @@ mod tests {
     fn looks_up_builtin_output_by_name() {
         let registry = Registry::with_builtins();
         assert!(registry.output_by_name("json").is_some());
+        assert!(registry.output_by_name("folded").is_some());
         assert!(registry.output_by_name("nonexistent").is_none());
     }
 
@@ -203,6 +205,10 @@ mod tests {
         let registry = Registry::with_builtins();
         let json = registry.output_by_extension("json");
         assert_eq!(json.map(OutputFormat::name), Some("json"));
+        let folded = registry.output_by_extension("folded");
+        assert_eq!(folded.map(OutputFormat::name), Some("folded"));
+        let collapsed = registry.output_by_extension("collapsed");
+        assert_eq!(collapsed.map(OutputFormat::name), Some("folded"));
         assert!(registry.output_by_extension("bin").is_none());
     }
 }

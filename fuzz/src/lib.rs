@@ -191,6 +191,16 @@ pub fn check_c_api(input: CApiInput) {
         unsafe { profcast_string_free(arbitrary) };
     }
 
+    // Folded can hold an interior NUL (it doesn't escape), so null here is fine.
+    // SAFETY: profile is a live handle returned by profcast_read.
+    let folded = unsafe { profcast_profile_write(profile, c"folded".as_ptr()) };
+    if folded.is_null() {
+        check_last_error_is_c_string();
+    } else {
+        // SAFETY: folded is an owned NUL-terminated string returned by profcast.
+        unsafe { profcast_string_free(folded) };
+    }
+
     // SAFETY: profile is a live handle returned by profcast_read.
     let json = unsafe { profcast_profile_write(profile, c"json".as_ptr()) };
     assert!(!json.is_null(), "serializing a live profile failed");

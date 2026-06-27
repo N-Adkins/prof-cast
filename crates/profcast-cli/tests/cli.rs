@@ -92,6 +92,40 @@ fn convert_infers_output_format_from_extension() {
 }
 
 #[test]
+fn convert_folded_to_folded_round_trips() {
+    let input = "main;work 5\na;b;c 10\n";
+    let output = run_with_stdin(
+        &["convert", "-", "-", "--from", "folded", "--to", "folded"],
+        input.as_bytes(),
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), input);
+}
+
+#[test]
+fn convert_infers_folded_output_from_extension() {
+    let input = temp_path("in.folded");
+    let out = temp_path("out.folded");
+    std::fs::write(&input, "a;b 3\n").unwrap();
+
+    let output = Command::new(BIN)
+        .args(["convert", input.to_str().unwrap(), out.to_str().unwrap()])
+        .output()
+        .expect("failed to run profcast");
+
+    let written = std::fs::read_to_string(&out).unwrap_or_default();
+    std::fs::remove_file(&input).ok();
+    std::fs::remove_file(&out).ok();
+
+    assert!(output.status.success());
+    assert_eq!(written, "a;b 3\n");
+}
+
+#[test]
 fn dump_compact_is_single_line() {
     let output = run_with_stdin(&["dump", "-", "--from", "folded", "--compact"], b"a;b 1\n");
     assert!(output.status.success());

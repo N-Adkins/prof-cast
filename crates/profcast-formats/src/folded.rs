@@ -19,7 +19,7 @@ use std::path::Path;
 use profcast_core::{
     Result,
     error::ProfcastError,
-    format::{Confidence, InputFormat, ProbeData},
+    format::{Confidence, InputFormat, OutputFormat, ProbeData, WriteOptions},
     model::{Frame, FrameId, Profile, Sample, ValueKind},
 };
 
@@ -246,7 +246,11 @@ impl InputFormat for FoldedFormat {
             .filename
             .map(Path::new)
             .and_then(Path::extension)
-            .is_some_and(|ext| self.extensions().iter().any(|expected| ext == *expected));
+            .is_some_and(|ext| {
+                InputFormat::extensions(self)
+                    .iter()
+                    .any(|expected| ext == *expected)
+            });
         if correct_extension {
             confidence = confidence.max(Confidence::Extension);
         }
@@ -323,6 +327,79 @@ impl InputFormat for FoldedFormat {
                 unit: "count".to_owned(),
             }],
         })
+    }
+}
+
+/// Renders a [`Frame`] back to a folded stack label.
+///
+/// This is the inverse of [`parse_frame`]. If it works properly, then
+/// folded -> model -> folded should result in the same input and output data.
+fn render_frame(frame: &Frame) -> String {
+    if !frame.raw.is_empty() {
+        return frame.raw.clone();
+    }
+
+    // Symbol: a bare address or a function name.
+    let symbol = frame.address.map_or_else(
+        || frame.function.clone().unwrap_or_default(),
+        |address| format!("0x{address:x}"),
+    );
+
+    // Annotation: a `(file:line)` source location or a `(module)` tag.
+    match (&frame.file, frame.line, &frame.module) {
+        (Some(file), Some(line), _) => format!("{symbol} ({file}:{line})"),
+        (Some(file), None, _) => format!("{symbol} ({file})"),
+        (None, _, Some(module)) => format!("{symbol} ({module})"),
+        (None, _, None) => symbol,
+    }
+}
+
+impl OutputFormat for FoldedFormat {
+    fn name(&self) -> &'static str {
+        "folded"
+    }
+
+    fn extensions(&self) -> &'static [&'static str] {
+        &["folded", "collapsed"]
+    }
+
+    fn write(&self, profile: &Profile, _options: WriteOptions) -> Result<Vec<u8>> {
+        let span = tracing::debug_span!("folded.write", samples = profile.samples.len());
+        let _guard = span.enter();
+
+        let frame_count = profile.frame_intern.len();
+        let mut out = String::new();
+
+        for (index, sample) in profile.samples.iter().enumerate() {
+            // Folded carries a single weight; the model may hold several value
+            // series, so we emit the first and drop the rest (folded is lossy).
+            let Some(&count) = sample.values.first() else {
+                let message = format!("sample {index} has no value to emit as a folded count");
+                return Err(ProfcastError::InvalidProfile(message));
+            };
+
+            // Stack is outermost (root) first, frames joined by `;`.
+            for (position, frame_id) in sample.stack.iter().enumerate() {
+                let Some(frame) = profile.frame_intern.get(frame_id.0 as usize) else {
+                    let message = format!(
+                        "sample {index} references frame id {} but only {frame_count} frames are interned",
+                        frame_id.0,
+                    );
+                    return Err(ProfcastError::InvalidProfile(message));
+                };
+                if position > 0 {
+                    out.push(';');
+                }
+                out.push_str(&render_frame(frame));
+            }
+
+            out.push(' ');
+            out.push_str(&count.to_string());
+            out.push('\n');
+        }
+
+        tracing::debug!(bytes = out.len(), "wrote folded profile");
+        Ok(out.into_bytes())
     }
 }
 
@@ -540,5 +617,122 @@ mod tests {
                 (Some("brk"), None, None, Some("libc.so.6")),
             ],
         );
+    }
+
+    fn write_string(profile: &Profile) -> String {
+        let bytes = FoldedFormat
+            .write(profile, WriteOptions::default())
+            .unwrap();
+        String::from_utf8(bytes).unwrap()
+    }
+
+    #[test]
+    fn write_round_trips_through_folded() {
+        // Frames keep their `raw` label, so a parse then a write reproduces the
+        // input byte for byte (frames are emitted root -> leaf, weight last).
+        let input = "a;b;c 10\na;b 5\n";
+        assert_eq!(write_string(&profile_of(input)), input);
+    }
+
+    #[test]
+    fn write_round_trips_annotated_frames() {
+        let input = "main (app.py:7);brk (libc.so.6) 4\n";
+        assert_eq!(write_string(&profile_of(input)), input);
+    }
+
+    #[test]
+    fn write_reconstructs_labels_without_raw() {
+        // Frames sourced from another format carry no `raw`; the label is
+        // rebuilt from the structured fields, mirroring `parse_frame`.
+        let profile = Profile {
+            frame_intern: vec![
+                Frame {
+                    function: Some("main".to_owned()),
+                    file: Some("main.rs".to_owned()),
+                    line: Some(42),
+                    ..Frame::default()
+                },
+                Frame {
+                    address: Some(0x7f40_6047_5e44),
+                    module: Some("libc.so.6".to_owned()),
+                    ..Frame::default()
+                },
+            ],
+            samples: vec![Sample {
+                stack: vec![FrameId(0), FrameId(1)],
+                values: vec![3],
+            }],
+            value_kinds: vec![ValueKind {
+                kind: "samples".to_owned(),
+                unit: "count".to_owned(),
+            }],
+        };
+        assert_eq!(
+            write_string(&profile),
+            "main (main.rs:42);0x7f4060475e44 (libc.so.6) 3\n",
+        );
+    }
+
+    #[test]
+    fn write_uses_only_the_first_value_series() {
+        let profile = Profile {
+            frame_intern: vec![Frame {
+                raw: "a".to_owned(),
+                ..Frame::default()
+            }],
+            samples: vec![Sample {
+                stack: vec![FrameId(0)],
+                values: vec![9, 99],
+            }],
+            value_kinds: vec![
+                ValueKind {
+                    kind: "samples".to_owned(),
+                    unit: "count".to_owned(),
+                },
+                ValueKind {
+                    kind: "cpu".to_owned(),
+                    unit: "nanoseconds".to_owned(),
+                },
+            ],
+        };
+        assert_eq!(write_string(&profile), "a 9\n");
+    }
+
+    #[test]
+    fn write_rejects_dangling_frame_id() {
+        let profile = Profile {
+            frame_intern: vec![Frame::default()],
+            samples: vec![Sample {
+                stack: vec![FrameId(7)],
+                values: vec![1],
+            }],
+            value_kinds: vec![ValueKind {
+                kind: "samples".to_owned(),
+                unit: "count".to_owned(),
+            }],
+        };
+        let err = FoldedFormat
+            .write(&profile, WriteOptions::default())
+            .unwrap_err();
+        assert!(matches!(err, ProfcastError::InvalidProfile(_)));
+    }
+
+    #[test]
+    fn write_rejects_sample_without_value() {
+        let profile = Profile {
+            frame_intern: vec![Frame {
+                raw: "a".to_owned(),
+                ..Frame::default()
+            }],
+            samples: vec![Sample {
+                stack: vec![FrameId(0)],
+                values: vec![],
+            }],
+            value_kinds: vec![],
+        };
+        let err = FoldedFormat
+            .write(&profile, WriteOptions::default())
+            .unwrap_err();
+        assert!(matches!(err, ProfcastError::InvalidProfile(_)));
     }
 }
