@@ -21,7 +21,10 @@ use std::{
     sync::OnceLock,
 };
 
-use profcast_core::{format::ProbeData, model::Profile as CoreProfile};
+use profcast_core::{
+    format::{ProbeData, WriteOptions},
+    model::Profile as CoreProfile,
+};
 use profcast_formats::Registry;
 
 thread_local! {
@@ -210,16 +213,23 @@ pub unsafe extern "C" fn profcast_read(
     }
 }
 
-/// Serializes a profile to a JSON string (free with [`profcast_string_free`]).
+/// Serializes a profile into the named output format and returns it as an owned
+/// NUL-terminated string (free with [`profcast_string_free`]).
 ///
-/// Returns `NULL` on error (see [`profcast_last_error`]).
+/// `format` selects an output format by name (e.g. `"json"`). Returns `NULL` on
+/// any error and records a message via [`profcast_last_error`]. Output formats
+/// are text today; one whose bytes are not NUL-free UTF-8 is rejected with an
+/// error rather than returned.
 ///
 /// # Safety
 ///
-/// `profile` must be a non-null pointer returned by [`profcast_read`] that has
-/// not yet been freed.
+/// `profile` must be a non-null handle from [`profcast_read`] that has not been
+/// freed. `format`, when non-null, must be a valid NUL-terminated C string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn profcast_profile_to_json(profile: *const Profile) -> *mut c_char {
+pub unsafe extern "C" fn profcast_profile_write(
+    profile: *const Profile,
+    format: *const c_char,
+) -> *mut c_char {
     if profile.is_null() {
         set_last_error("profile pointer was null");
         return ptr::null_mut();
@@ -227,13 +237,32 @@ pub unsafe extern "C" fn profcast_profile_to_json(profile: *const Profile) -> *m
     // SAFETY: non-null and, per the contract, a live handle from profcast_read.
     let profile = unsafe { &*profile };
 
-    match serde_json::to_string(&profile.inner) {
-        Ok(json) => into_c_string(&json),
+    // SAFETY: forwarding the caller's `format` validity contract.
+    let Some(name) = (unsafe { opt_str(format) }) else {
+        set_last_error("output format name was null or not valid UTF-8");
+        return ptr::null_mut();
+    };
+
+    let Some(output) = registry().output_by_name(name) else {
+        set_last_error(format!("unknown output format '{name}'"));
+        return ptr::null_mut();
+    };
+
+    let bytes = match output.write(&profile.inner, WriteOptions::default()) {
+        Ok(bytes) => bytes,
         Err(error) => {
             set_last_error(error.to_string());
-            ptr::null_mut()
+            return ptr::null_mut();
         }
-    }
+    };
+
+    String::from_utf8(bytes).map_or_else(
+        |_| {
+            set_last_error(format!("output format '{name}' produced non-text output"));
+            ptr::null_mut()
+        },
+        |text| into_c_string(&text),
+    )
 }
 
 /// Frees a profile handle previously returned by [`profcast_read`].
@@ -305,26 +334,48 @@ mod test {
     }
 
     #[test]
-    fn read_and_serialize_roundtrip() -> Result<()> {
+    fn read_and_write_roundtrip() -> Result<()> {
         let input = b"main;work 5\n";
         // SAFETY: valid buffer; null format triggers auto-detect; null filename.
         let profile =
             unsafe { profcast_read(input.as_ptr(), input.len(), ptr::null(), ptr::null()) };
         assert!(!profile.is_null());
 
-        // SAFETY: profile is a live handle from profcast_read.
-        let json = unsafe { profcast_profile_to_json(profile) };
+        // SAFETY: live profile handle; "json" is a valid C string.
+        let json = unsafe { profcast_profile_write(profile, c"json".as_ptr()) };
         assert!(!json.is_null());
         // SAFETY: just produced a valid owned string.
         let text = unsafe { CStr::from_ptr(json) }.to_str()?.to_owned();
         assert!(text.contains("\"raw\":\"main\""));
         assert!(text.contains("\"raw\":\"work\""));
+        let parsed: CoreProfile = serde_json::from_str(&text)?;
+        assert!(parsed.validate().is_ok());
 
         // SAFETY: freeing resources we own, each exactly once.
         unsafe { profcast_string_free(json) };
         // SAFETY: freeing the profile handle exactly once.
         unsafe { profcast_profile_free(profile) };
         Ok(())
+    }
+
+    #[test]
+    fn write_unknown_format_sets_error() {
+        let input = b"a;b 1\n";
+        // SAFETY: valid buffer; null format auto-detects; null filename.
+        let profile =
+            unsafe { profcast_read(input.as_ptr(), input.len(), ptr::null(), ptr::null()) };
+        assert!(!profile.is_null());
+
+        // SAFETY: live profile; "nope" is a valid C string.
+        let json = unsafe { profcast_profile_write(profile, c"nope".as_ptr()) };
+        assert!(json.is_null());
+
+        // SAFETY: reading the thread-local error pointer set above.
+        let err = unsafe { CStr::from_ptr(profcast_last_error()) };
+        assert!(err.to_str().unwrap_or_default().contains("nope"));
+
+        // SAFETY: freeing the profile handle exactly once.
+        unsafe { profcast_profile_free(profile) };
     }
 
     #[test]

@@ -20,13 +20,23 @@ The project is a Cargo workspace:
 
 ## Building
 
-Requires a stable Rust toolchain.
+Requires a stable Rust toolchain. The minimum supported Rust version (MSRV) is
+1.85.
 
 ```sh
 cargo build --release
 ```
 
 The CLI is written to `target/release/profcast`.
+
+To install the `profcast` binary into Cargo's bin directory (`~/.cargo/bin`):
+
+```sh
+make install
+```
+
+This wraps `cargo install --path crates/profcast-cli`. Remove it again with
+`make uninstall`.
 
 ## Usage
 

@@ -6,6 +6,14 @@ header:
 check-header: header
 	git diff --exit-code include/profcast.h
 
+.PHONY: install
+install:
+	cargo install --path crates/profcast-cli --locked
+
+.PHONY: uninstall
+uninstall:
+	cargo uninstall profcast-cli
+
 .PHONY: miri-setup
 miri-setup:
 	rustup toolchain install nightly --profile minimal --component miri

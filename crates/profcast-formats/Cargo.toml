@@ -2,6 +2,7 @@
 name = "profcast-formats"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -14,5 +15,6 @@ description = "Format specifications for different profiler output schemes"
 workspace = true
 
 [dependencies]
+serde_json.workspace = true
 tracing.workspace = true
 profcast-core = { path = "../profcast-core" }

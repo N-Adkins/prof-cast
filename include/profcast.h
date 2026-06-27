@@ -61,16 +61,20 @@ struct profcast_Profile *profcast_read(const uint8_t *buf,
                                        const char *filename);
 
 /**
- * Serializes a profile to a JSON string (free with [`profcast_string_free`]).
+ * Serializes a profile into the named output format and returns it as an owned
+ * NUL-terminated string (free with [`profcast_string_free`]).
  *
- * Returns `NULL` on error (see [`profcast_last_error`]).
+ * `format` selects an output format by name (e.g. `"json"`). Returns `NULL` on
+ * any error and records a message via [`profcast_last_error`]. Output formats
+ * are text today; one whose bytes are not NUL-free UTF-8 is rejected with an
+ * error rather than returned.
  *
  * # Safety
  *
- * `profile` must be a non-null pointer returned by [`profcast_read`] that has
- * not yet been freed.
+ * `profile` must be a non-null handle from [`profcast_read`] that has not been
+ * freed. `format`, when non-null, must be a valid NUL-terminated C string.
  */
-char *profcast_profile_to_json(const struct profcast_Profile *profile);
+char *profcast_profile_write(const struct profcast_Profile *profile, const char *format);
 
 /**
  * Frees a profile handle previously returned by [`profcast_read`].

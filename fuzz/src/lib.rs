@@ -15,7 +15,7 @@ use profcast_core::{
     model::Profile,
 };
 use profcast_ffi::{
-    profcast_last_error, profcast_probe, profcast_profile_free, profcast_profile_to_json,
+    profcast_last_error, profcast_probe, profcast_profile_free, profcast_profile_write,
     profcast_read, profcast_string_free, profcast_version,
 };
 
@@ -149,9 +149,9 @@ pub fn check_c_api(input: CApiInput) {
         profcast_profile_free(ptr::null_mut());
     }
     // SAFETY: null profile pointers are documented as rejected with null.
-    let null_json = unsafe { profcast_profile_to_json(ptr::null()) };
+    let null_write = unsafe { profcast_profile_write(ptr::null(), c"json".as_ptr()) };
     assert!(
-        null_json.is_null(),
+        null_write.is_null(),
         "serializing a null profile unexpectedly succeeded",
     );
     check_last_error_is_c_string();
@@ -180,8 +180,19 @@ pub fn check_c_api(input: CApiInput) {
         return;
     }
 
+    // Exercise an arbitrary (usually unknown) output format name; it must fail
+    // cleanly or return an owned string, never misbehave.
+    // SAFETY: profile is live; format is null or a live NUL-terminated string.
+    let arbitrary = unsafe { profcast_profile_write(profile, format) };
+    if arbitrary.is_null() {
+        check_last_error_is_c_string();
+    } else {
+        // SAFETY: non-null write results are owned NUL-terminated strings.
+        unsafe { profcast_string_free(arbitrary) };
+    }
+
     // SAFETY: profile is a live handle returned by profcast_read.
-    let json = unsafe { profcast_profile_to_json(profile) };
+    let json = unsafe { profcast_profile_write(profile, c"json".as_ptr()) };
     assert!(!json.is_null(), "serializing a live profile failed");
 
     // SAFETY: json is an owned NUL-terminated string returned by profcast.

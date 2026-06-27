@@ -1,12 +1,14 @@
-//! A registry of known input formats plus probe-based auto-detection.
+//! A registry of known input and output formats.
 //!
-//! The registry owns a set of [`InputFormat`] implementations and provides two
-//! ways to pick one: by explicit name (e.g. a `--from folded` flag) or by
-//! probing arbitrary bytes and choosing the highest-confidence match.
+//! The registry owns a set of [`InputFormat`] implementations and a set of
+//! [`OutputFormat`] implementations. Input formats can be picked by explicit
+//! name (e.g. a `--from folded` flag) or by probing arbitrary bytes and
+//! choosing the highest-confidence match; output formats are picked by name
+//! (e.g. `--to json`) or inferred from a destination file extension.
 
-use profcast_core::format::{Confidence, InputFormat, ProbeData};
+use profcast_core::format::{Confidence, InputFormat, OutputFormat, ProbeData};
 
-use crate::folded::FoldedFormat;
+use crate::{folded::FoldedFormat, json::JsonFormat};
 
 /// The outcome of a successful probe: which format matched and how strongly.
 #[derive(Debug, Clone, Copy)]
@@ -17,10 +19,12 @@ pub struct Match<'a> {
     pub confidence: Confidence,
 }
 
-/// A collection of input formats that can be looked up or auto-detected.
+/// A collection of input and output formats that can be looked up,
+/// auto-detected, or inferred.
 #[derive(Default)]
 pub struct Registry {
     formats: Vec<Box<dyn InputFormat>>,
+    outputs: Vec<Box<dyn OutputFormat>>,
 }
 
 impl Registry {
@@ -38,15 +42,21 @@ impl Registry {
     pub fn with_builtins() -> Self {
         let mut registry = Self::new();
         registry.register(Box::new(FoldedFormat));
+        registry.register_output(Box::new(JsonFormat));
         registry
     }
 
-    /// Adds a format to the registry.
+    /// Adds an input format to the registry.
     ///
     /// Registration order matters: when several formats report the same
     /// confidence during a probe, the one registered first wins.
     pub fn register(&mut self, format: Box<dyn InputFormat>) {
         self.formats.push(format);
+    }
+
+    /// Adds an output format to the registry.
+    pub fn register_output(&mut self, output: Box<dyn OutputFormat>) {
+        self.outputs.push(output);
     }
 
     /// Looks up a format by its [`InputFormat::name`].
@@ -63,9 +73,38 @@ impl Registry {
         found
     }
 
-    /// Iterates over every registered format in registration order.
+    /// Iterates over every registered input format in registration order.
     pub fn formats(&self) -> impl ExactSizeIterator<Item = &dyn InputFormat> {
         self.formats.iter().map(AsRef::as_ref)
+    }
+
+    /// Looks up an output format by its [`OutputFormat::name`].
+    #[must_use]
+    pub fn output_by_name(&self, name: &str) -> Option<&dyn OutputFormat> {
+        let found = self
+            .outputs
+            .iter()
+            .map(AsRef::as_ref)
+            .find(|output| output.name() == name);
+        if found.is_none() {
+            tracing::debug!(name, "no registered output format with this name");
+        }
+        found
+    }
+
+    /// Looks up an output format by a destination file extension (without the
+    /// leading dot), e.g. `json` for `out.json`.
+    #[must_use]
+    pub fn output_by_extension(&self, extension: &str) -> Option<&dyn OutputFormat> {
+        self.outputs
+            .iter()
+            .map(AsRef::as_ref)
+            .find(|output| output.extensions().contains(&extension))
+    }
+
+    /// Iterates over every registered output format in registration order.
+    pub fn outputs(&self) -> impl ExactSizeIterator<Item = &dyn OutputFormat> {
+        self.outputs.iter().map(AsRef::as_ref)
     }
 
     /// Probes `data` against every format and returns the strongest match.
@@ -144,10 +183,26 @@ mod tests {
     fn empty_registry_detects_nothing() {
         let registry = Registry::new();
         assert_eq!(registry.formats().len(), 0);
+        assert_eq!(registry.outputs().len(), 0);
         let data = ProbeData {
             filename: Some("x.folded"),
             buf: b"a;b 1\n",
         };
         assert!(registry.probe(&data).is_none());
+    }
+
+    #[test]
+    fn looks_up_builtin_output_by_name() {
+        let registry = Registry::with_builtins();
+        assert!(registry.output_by_name("json").is_some());
+        assert!(registry.output_by_name("nonexistent").is_none());
+    }
+
+    #[test]
+    fn infers_output_from_extension() {
+        let registry = Registry::with_builtins();
+        let json = registry.output_by_extension("json");
+        assert_eq!(json.map(OutputFormat::name), Some("json"));
+        assert!(registry.output_by_extension("bin").is_none());
     }
 }

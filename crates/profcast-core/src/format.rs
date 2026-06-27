@@ -35,12 +35,17 @@ pub struct ProbeData<'a> {
     pub buf: &'a [u8],
 }
 
-/// Generic trait that should be implemented for each input format
+/// Generic trait that should be implemented for each input format.
+///
+/// This is the read-side mirror of [`OutputFormat`]: where an output format
+/// turns a [`Profile`] into bytes, an input format turns bytes back into a
+/// [`Profile`]. The input is `&[u8]` rather than `&str` so that binary formats
+/// are representable, not just text.
 pub trait InputFormat: Sync + Send + std::fmt::Debug {
-    /// Returns a string name for the format, eg. "folded"
+    /// Returns a string name for the format, eg. "folded".
     fn name(&self) -> &'static str;
     /// Returns valid file extensions for this format, used for [`Confidence`]
-    /// checking
+    /// checking.
     fn extensions(&self) -> &'static [&'static str] {
         &[]
     }
@@ -55,4 +60,41 @@ pub trait InputFormat: Sync + Send + std::fmt::Debug {
     /// Returns an error if `input` does not conform to this format's grammar
     /// (for example malformed or truncated data, or invalid text encoding).
     fn read(&self, input: &[u8]) -> Result<Profile>;
+}
+
+/// Cross-format rendering hints passed to [`OutputFormat::write`].
+///
+/// This is the write-side analog of [`ProbeData`]: a structured bundle of
+/// options that applies to every format uniformly. The hints are best-effort -
+/// a format applies the ones that are meaningful for it and ignores the rest
+/// (a binary format, for instance, has no notion of pretty-printing).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WriteOptions {
+    /// Prefer human-readable output (indentation, whitespace) over the most
+    /// compact representation. Formats with no such distinction ignore it.
+    pub pretty: bool,
+}
+
+/// Generic trait that should be implemented for each output format.
+///
+/// This is the write-side mirror of [`InputFormat`]: where an input format
+/// turns bytes into a [`Profile`], an output format turns a [`Profile`] back
+/// into bytes. The output is `Vec<u8>` rather than `String` so that binary
+/// formats are representable, not just text.
+pub trait OutputFormat: Sync + Send + std::fmt::Debug {
+    /// Returns a string name for the format, eg. "json".
+    fn name(&self) -> &'static str;
+    /// Returns valid file extensions for this format, used to infer the output
+    /// format from a destination path (e.g. `out.json` -> `json`).
+    fn extensions(&self) -> &'static [&'static str] {
+        &[]
+    }
+    /// Serializes `profile` into this format's byte representation, honoring the
+    /// cross-format hints in `options`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the profile cannot be encoded, for example a
+    /// serialization or I/O failure in the underlying encoder.
+    fn write(&self, profile: &Profile, options: WriteOptions) -> Result<Vec<u8>>;
 }

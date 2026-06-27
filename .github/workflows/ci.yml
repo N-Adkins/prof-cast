@@ -122,6 +122,24 @@ jobs:
       - name: Check without default features
         run: cargo check --workspace --no-default-features --locked
 
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust 1.85.0
+        run: rustup toolchain install 1.85.0 --profile minimal
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Build with the minimum supported Rust version
+        run: cargo +1.85.0 build --workspace --all-features --locked
+
   c-abi:
     name: C ABI
     runs-on: ubuntu-latest

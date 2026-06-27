@@ -8,6 +8,9 @@ pass before it is merged.
 A stable Rust toolchain is required for everyday work. Miri and the fuzz targets
 additionally require a nightly toolchain.
 
+The minimum supported Rust version (MSRV) is 1.85, which CI verifies on every
+pull request. Avoid language or dependency features that would raise it.
+
 ## Checks
 
 CI runs the following on every pull request. Run them locally before pushing:
