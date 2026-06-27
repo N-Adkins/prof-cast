@@ -129,6 +129,85 @@ fn probe_content(buf: &[u8]) -> Confidence {
     }
 }
 
+/// Parses a bare hexadecimal address such as `0x7f4060475e44`.
+///
+/// Requires the whole token to be a `0x`-prefixed hex literal so that ordinary
+/// symbol names are never mistaken for addresses.
+fn parse_hex_address(token: &str) -> Option<u64> {
+    let hex = token
+        .strip_prefix("0x")
+        .or_else(|| token.strip_prefix("0X"))?;
+    if hex.is_empty() {
+        return None;
+    }
+    u64::from_str_radix(hex, 16).ok()
+}
+
+/// Splits a `file:line` annotation into its file and parsed line number.
+///
+/// Returns `None` when the trailing `:`-segment is not an integer line, which is
+/// how a module annotation (e.g. `libc.so.6`) is told apart from a source
+/// location (e.g. `base64.py:304`).
+fn split_file_line(annotation: &str) -> Option<(&str, u32)> {
+    let (file, line) = annotation.rsplit_once(':')?;
+    if file.is_empty() {
+        return None;
+    }
+    Some((file, line.parse::<u32>().ok()?))
+}
+
+/// Best-effort extraction of structured fields from a folded frame label.
+///
+/// Folded stacks have no formal sub-grammar for a frame; producers annotate the
+/// bare symbol differently. This recognises the following shapes emitted by perf's
+/// `stackcollapse` and `py-spy` when I tried them:
+///
+/// - `symbol (file.ext:line)` -> function + file + line
+/// - `symbol (module)`        -> function + module (e.g. `libc.so.6`)
+/// - `0xADDR (module)`        -> address + module
+/// - `symbol`                 -> function only
+///
+/// TODO flesh this out.
+///
+/// The full original label is always preserved in [`Frame::raw`], and anything
+/// that does not match falls back to treating the whole label as the function
+/// name, so no information is ever lost.
+fn parse_frame(label: &str) -> Frame {
+    let mut frame = Frame {
+        raw: label.to_owned(),
+        ..Frame::default()
+    };
+
+    // Peel off a trailing " (...)" annotation. The leading space distinguishes a
+    // real annotation from parentheses that belong to a signature such as
+    // `Foo::bar(int, int)`.
+    let (symbol, annotation) = label
+        .strip_suffix(')')
+        .and_then(|rest| rest.rsplit_once(" ("))
+        .map_or_else(
+            || (label.trim(), None),
+            |(symbol, annotation)| (symbol.trim(), Some(annotation)),
+        );
+
+    // The symbol is either a raw address or a function name.
+    if let Some(address) = parse_hex_address(symbol) {
+        frame.address = Some(address);
+    } else if !symbol.is_empty() {
+        frame.function = Some(symbol.to_owned());
+    }
+
+    if let Some(annotation) = annotation {
+        if let Some((file, line)) = split_file_line(annotation) {
+            frame.file = Some(file.to_owned());
+            frame.line = Some(line);
+        } else {
+            frame.module = Some(annotation.to_owned());
+        }
+    }
+
+    frame
+}
+
 /// Builds a [`Profile`]'s interned frame table while parsing.
 #[derive(Default)]
 struct FrameInterner {
@@ -145,10 +224,7 @@ impl FrameInterner {
         // Frame ids are u32; 4 billion distinct frames is not a real input, so
         // saturate rather than introduce a fallible path through every line.
         let id = FrameId(u32::try_from(self.frames.len()).unwrap_or(u32::MAX));
-        self.frames.push(Frame {
-            raw: label.to_owned(),
-            ..Frame::default()
-        });
+        self.frames.push(parse_frame(label));
         self.index.insert(label.to_owned(), id);
         id
     }
@@ -370,5 +446,95 @@ mod tests {
             buf: b"",
         };
         assert_eq!(FoldedFormat.probe(&data), Confidence::None);
+    }
+
+    #[test]
+    fn parses_python_frame_with_file_and_line() {
+        let frame = parse_frame("_85encode (base64.py:304)");
+        assert_eq!(frame.raw, "_85encode (base64.py:304)");
+        assert_eq!(frame.function.as_deref(), Some("_85encode"));
+        assert_eq!(frame.file.as_deref(), Some("base64.py"));
+        assert_eq!(frame.line, Some(304));
+        assert_eq!(frame.module, None);
+        assert_eq!(frame.address, None);
+    }
+
+    #[test]
+    fn parses_native_frame_with_module() {
+        let frame = parse_frame("BZ2_blockSort (libbz2.so.1.0.8)");
+        assert_eq!(frame.function.as_deref(), Some("BZ2_blockSort"));
+        assert_eq!(frame.module.as_deref(), Some("libbz2.so.1.0.8"));
+        assert_eq!(frame.file, None);
+        assert_eq!(frame.line, None);
+        assert_eq!(frame.address, None);
+    }
+
+    #[test]
+    fn parses_hex_address_with_module() {
+        let frame = parse_frame("0x7f4060475e44 (libsqlite3.so.3.51.2)");
+        assert_eq!(frame.address, Some(0x7f40_6047_5e44));
+        assert_eq!(frame.module.as_deref(), Some("libsqlite3.so.3.51.2"));
+        assert_eq!(frame.function, None);
+        assert_eq!(frame.file, None);
+        assert_eq!(frame.line, None);
+    }
+
+    #[test]
+    fn keeps_signature_parens_as_function() {
+        let frame = parse_frame("Foo::bar(int, int)");
+        assert_eq!(frame.function.as_deref(), Some("Foo::bar(int, int)"));
+        assert_eq!(frame.file, None);
+        assert_eq!(frame.module, None);
+        assert_eq!(frame.address, None);
+    }
+
+    #[test]
+    fn splits_module_after_a_signature() {
+        let frame = parse_frame("Foo::bar(int, int) (/usr/lib/foo.so)");
+        assert_eq!(frame.function.as_deref(), Some("Foo::bar(int, int)"));
+        assert_eq!(frame.module.as_deref(), Some("/usr/lib/foo.so"));
+        assert_eq!(frame.file, None);
+    }
+
+    #[test]
+    fn splits_file_path_with_line() {
+        let frame = parse_frame("walk (/usr/lib/python3.14/ast.py:397)");
+        assert_eq!(frame.function.as_deref(), Some("walk"));
+        assert_eq!(frame.file.as_deref(), Some("/usr/lib/python3.14/ast.py"));
+        assert_eq!(frame.line, Some(397));
+    }
+
+    #[test]
+    fn bare_symbol_is_function_only() {
+        let frame = parse_frame("main");
+        assert_eq!(frame.function.as_deref(), Some("main"));
+        assert_eq!(frame.file, None);
+        assert_eq!(frame.line, None);
+        assert_eq!(frame.module, None);
+        assert_eq!(frame.address, None);
+    }
+
+    #[test]
+    fn read_populates_structured_frame_fields() {
+        let profile = profile_of("main (app.py:7);brk (libc.so.6) 4\n");
+        let fields: Vec<_> = profile
+            .frame_intern
+            .iter()
+            .map(|frame| {
+                (
+                    frame.function.as_deref(),
+                    frame.file.as_deref(),
+                    frame.line,
+                    frame.module.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            fields,
+            vec![
+                (Some("main"), Some("app.py"), Some(7), None),
+                (Some("brk"), None, None, Some("libc.so.6")),
+            ],
+        );
     }
 }

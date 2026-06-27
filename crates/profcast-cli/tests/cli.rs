@@ -4,6 +4,11 @@
 //! so that argument parsing, stdin/stdout handling, format inference, and exit
 //! codes are exercised the way a user hits them - none of which the
 //! library-level unit tests cover.
+//!
+//! These spawn the compiled binary as a subprocess and touch the filesystem,
+//! neither of which Miri supports, so the whole suite is compiled out under
+//! Miri rather than run there.
+#![cfg(not(miri))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 
 use std::io::Write;

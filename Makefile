@@ -14,6 +14,10 @@ install:
 uninstall:
 	cargo uninstall profcast-cli
 
+.PHONY: test
+test::
+	cargo test --all-targets
+
 .PHONY: miri-setup
 miri-setup:
 	rustup toolchain install nightly --profile minimal --component miri
