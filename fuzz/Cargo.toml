@@ -38,6 +38,20 @@ doc = false
 bench = false
 
 [[bin]]
+name = "pprof_probe"
+path = "fuzz_targets/pprof_probe.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pprof_read"
+path = "fuzz_targets/pprof_read.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "c_api"
 path = "fuzz_targets/c_api.rs"
 test = false

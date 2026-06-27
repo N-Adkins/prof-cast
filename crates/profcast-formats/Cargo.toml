@@ -17,4 +17,6 @@ workspace = true
 [dependencies]
 serde_json.workspace = true
 tracing.workspace = true
+prost.workspace = true
+flate2.workspace = true
 profcast-core = { path = "../profcast-core" }

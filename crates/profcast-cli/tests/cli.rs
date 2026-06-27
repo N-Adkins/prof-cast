@@ -126,6 +126,81 @@ fn convert_infers_folded_output_from_extension() {
 }
 
 #[test]
+fn convert_folded_to_pprof_and_back_round_trips() {
+    let folded = "main;work 5\na;b;c 10\n";
+    let input = temp_path("in.folded");
+    let pprof = temp_path("out.pprof");
+    std::fs::write(&input, folded).unwrap();
+
+    // folded -> pprof, output format inferred from the .pprof extension.
+    let to_pprof = Command::new(BIN)
+        .args(["convert", input.to_str().unwrap(), pprof.to_str().unwrap()])
+        .output()
+        .expect("failed to run profcast");
+    assert!(
+        to_pprof.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&to_pprof.stderr),
+    );
+    // pprof is gzip-framed binary.
+    assert_eq!(&std::fs::read(&pprof).unwrap()[..2], &[0x1f, 0x8b]);
+
+    // pprof -> folded, input format auto-detected by probing the file.
+    let back = Command::new(BIN)
+        .args(["convert", pprof.to_str().unwrap(), "-", "--to", "folded"])
+        .output()
+        .expect("failed to run profcast");
+
+    std::fs::remove_file(&input).ok();
+    std::fs::remove_file(&pprof).ok();
+
+    assert!(
+        back.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&back.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&back.stdout), folded);
+}
+
+#[test]
+fn convert_infers_pprof_from_pb_gz_extension() {
+    // Regression: `*.pb.gz` surfaces only `.gz` to the CLI, which must still
+    // resolve to pprof rather than silently falling back to JSON.
+    let input = temp_path("in.folded");
+    let out = temp_path("out.pb.gz");
+    std::fs::write(&input, "a;b 3\n").unwrap();
+
+    let output = Command::new(BIN)
+        .args(["convert", input.to_str().unwrap(), out.to_str().unwrap()])
+        .output()
+        .expect("failed to run profcast");
+    let written = std::fs::read(&out).unwrap_or_default();
+
+    // It must be gzip-framed pprof, and dump must read it back.
+    let dumped = Command::new(BIN)
+        .args(["dump", out.to_str().unwrap()])
+        .output()
+        .expect("failed to run profcast");
+
+    std::fs::remove_file(&input).ok();
+    std::fs::remove_file(&out).ok();
+
+    assert!(output.status.success());
+    assert_eq!(
+        &written[..2],
+        &[0x1f, 0x8b],
+        "expected gzip pprof, not JSON"
+    );
+    assert!(
+        dumped.status.success(),
+        "dump of round-tripped pprof failed: {}",
+        String::from_utf8_lossy(&dumped.stderr),
+    );
+    // pprof has no raw label, so the folded symbol comes back as `function`.
+    assert!(String::from_utf8_lossy(&dumped.stdout).contains("\"function\": \"a\""));
+}
+
+#[test]
 fn dump_compact_is_single_line() {
     let output = run_with_stdin(&["dump", "-", "--from", "folded", "--compact"], b"a;b 1\n");
     assert!(output.status.success());

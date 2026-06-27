@@ -6,9 +6,9 @@ back out in another representation.
 
 ## Status
 
-Early development. The folded stack format can be read and written, and
-profiles can be emitted as JSON. Note that folded output is lossy: it keeps only
-the first value series, since the format carries a single weight per stack.
+Early development. The folded stack and pprof formats can be read and written,
+and profiles can be emitted as JSON. Note that folded output is lossy: it keeps
+only the first value series, since the format carries a single weight per stack.
 Further input and output formats are planned.
 
 ## Layout

@@ -34,4 +34,8 @@ pub enum ProfcastError {
     /// structural invariants
     #[error("invalid profile: {0}")]
     InvalidProfile(String),
+
+    /// A binary format's wire representation could not be decoded
+    #[error("decode error: {0}")]
+    Decode(String),
 }

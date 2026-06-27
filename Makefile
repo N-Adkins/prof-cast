@@ -2,6 +2,20 @@
 header:
 	cbindgen crates/profcast-ffi --config cbindgen.toml --output include/profcast.h
 
+# Regenerate the vendored pprof prost types. Needs protoc-gen-prost
+# (cargo install protoc-gen-prost). The committed output is consumed verbatim
+# by src/pprof/mod.rs, which supplies the module wrapper and lint allows.
+PPROF_PROTO_DIR := crates/profcast-formats/proto
+PPROF_GEN := crates/profcast-formats/src/pprof/proto.gen.rs
+
+.PHONY: proto
+proto:
+	@tmp=$$(mktemp -d); \
+	protoc --prost_out="$$tmp" -I $(PPROF_PROTO_DIR) $(PPROF_PROTO_DIR)/profile.proto; \
+	mv "$$(find "$$tmp" -name '*.rs')" $(PPROF_GEN); \
+	rm -rf "$$tmp"; \
+	echo "regenerated $(PPROF_GEN)"
+
 .PHONY: check-header
 check-header: header
 	git diff --exit-code include/profcast.h

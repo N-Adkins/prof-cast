@@ -31,6 +31,9 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 regex = { version = "1", default-features = false, features = ["std"] }
+# pprof: prost is runtime-only (codegen is vendored); flate2 for gzip.
+prost = "0.14"
+flate2 = "1"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

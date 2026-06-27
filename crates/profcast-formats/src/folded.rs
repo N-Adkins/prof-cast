@@ -339,11 +339,13 @@ fn render_frame(frame: &Frame) -> String {
         return frame.raw.clone();
     }
 
-    // Symbol: a bare address or a function name.
-    let symbol = frame.address.map_or_else(
-        || frame.function.clone().unwrap_or_default(),
-        |address| format!("0x{address:x}"),
-    );
+    // Symbol: prefer the human-readable function name (pprof frames can carry
+    // both); fall back to a bare address.
+    let symbol = frame
+        .function
+        .clone()
+        .or_else(|| frame.address.map(|address| format!("0x{address:x}")))
+        .unwrap_or_default();
 
     // Annotation: a `(file:line)` source location or a `(module)` tag.
     match (&frame.file, frame.line, &frame.module) {
@@ -671,6 +673,30 @@ mod tests {
             write_string(&profile),
             "main (main.rs:42);0x7f4060475e44 (libc.so.6) 3\n",
         );
+    }
+
+    #[test]
+    fn write_prefers_function_over_address() {
+        // pprof frames carry both a function name and an instruction address;
+        // folded should render the symbol, not the hex address.
+        let profile = Profile {
+            frame_intern: vec![Frame {
+                function: Some("main.serve".to_owned()),
+                file: Some("server.go".to_owned()),
+                line: Some(51),
+                address: Some(0x4c_6fea),
+                ..Frame::default()
+            }],
+            samples: vec![Sample {
+                stack: vec![FrameId(0)],
+                values: vec![1],
+            }],
+            value_kinds: vec![ValueKind {
+                kind: "samples".to_owned(),
+                unit: "count".to_owned(),
+            }],
+        };
+        assert_eq!(write_string(&profile), "main.serve (server.go:51) 1\n");
     }
 
     #[test]

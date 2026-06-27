@@ -161,16 +161,23 @@ fn resolve_output<'a>(
             .with_context(|| format!("unknown output format '{name}'"));
     }
 
-    output_extension(output)
-        .and_then(|extension| registry.output_by_extension(extension))
-        .map_or_else(
-            || {
-                registry
-                    .output_by_name("json")
-                    .context("default output format 'json' is not registered")
-            },
-            Ok,
-        )
+    let extension = output_extension(output);
+    if let Some(format) = extension.and_then(|ext| registry.output_by_extension(ext)) {
+        return Ok(format);
+    }
+
+    // No usable extension: fall back to JSON, but never silently - an
+    // unrecognized extension (e.g. a misremembered `out.pb.gz`) almost always
+    // means the user wanted a different format.
+    if let Some(ext) = extension {
+        tracing::warn!(
+            extension = ext,
+            "unrecognized output extension; defaulting to json. Use --to to choose a format.",
+        );
+    }
+    registry
+        .output_by_name("json")
+        .context("default output format 'json' is not registered")
 }
 
 fn run_convert(

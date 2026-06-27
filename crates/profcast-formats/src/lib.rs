@@ -3,6 +3,7 @@
 
 pub mod folded;
 pub mod json;
+pub mod pprof;
 pub mod registry;
 
 pub use registry::{Match, Registry};

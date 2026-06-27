@@ -8,7 +8,7 @@
 
 use profcast_core::format::{Confidence, InputFormat, OutputFormat, ProbeData};
 
-use crate::{folded::FoldedFormat, json::JsonFormat};
+use crate::{folded::FoldedFormat, json::JsonFormat, pprof::PprofFormat};
 
 /// The outcome of a successful probe: which format matched and how strongly.
 #[derive(Debug, Clone, Copy)]
@@ -42,7 +42,9 @@ impl Registry {
     pub fn with_builtins() -> Self {
         let mut registry = Self::new();
         registry.register(Box::new(FoldedFormat));
+        registry.register(Box::new(PprofFormat));
         registry.register_output(Box::new(FoldedFormat));
+        registry.register_output(Box::new(PprofFormat));
         registry.register_output(Box::new(JsonFormat));
         registry
     }
@@ -153,7 +155,45 @@ mod tests {
     fn looks_up_builtin_by_name() {
         let registry = Registry::with_builtins();
         assert!(registry.by_name("folded").is_some());
+        assert!(registry.by_name("pprof").is_some());
         assert!(registry.by_name("nonexistent").is_none());
+    }
+
+    #[test]
+    fn probes_pprof_content() {
+        use profcast_core::{
+            format::WriteOptions,
+            model::{Frame, FrameId, Profile, Sample, ValueKind},
+        };
+
+        let profile = Profile {
+            frame_intern: vec![Frame {
+                function: Some("main".to_owned()),
+                ..Frame::default()
+            }],
+            samples: vec![Sample {
+                stack: vec![FrameId(0)],
+                values: vec![1],
+            }],
+            value_kinds: vec![ValueKind {
+                kind: "samples".to_owned(),
+                unit: "count".to_owned(),
+            }],
+        };
+        let registry = Registry::with_builtins();
+        let bytes = registry
+            .output_by_name("pprof")
+            .unwrap()
+            .write(&profile, WriteOptions::default())
+            .unwrap();
+
+        let matched = registry
+            .probe(&ProbeData {
+                filename: None,
+                buf: &bytes,
+            })
+            .unwrap();
+        assert_eq!(matched.format.name(), "pprof");
     }
 
     #[test]
@@ -197,6 +237,7 @@ mod tests {
         let registry = Registry::with_builtins();
         assert!(registry.output_by_name("json").is_some());
         assert!(registry.output_by_name("folded").is_some());
+        assert!(registry.output_by_name("pprof").is_some());
         assert!(registry.output_by_name("nonexistent").is_none());
     }
 
@@ -209,6 +250,11 @@ mod tests {
         assert_eq!(folded.map(OutputFormat::name), Some("folded"));
         let collapsed = registry.output_by_extension("collapsed");
         assert_eq!(collapsed.map(OutputFormat::name), Some("folded"));
+        let pprof = registry.output_by_extension("pprof");
+        assert_eq!(pprof.map(OutputFormat::name), Some("pprof"));
+        // A conventional `*.pb.gz` path surfaces only the `gz` component.
+        let gz = registry.output_by_extension("gz");
+        assert_eq!(gz.map(OutputFormat::name), Some("pprof"));
         assert!(registry.output_by_extension("bin").is_none());
     }
 }
