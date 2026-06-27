@@ -64,12 +64,20 @@ undocumented_unsafe_blocks = "deny"
 multiple_unsafe_ops_per_block = "deny"
 missing_safety_doc = "deny"
 
-unwrap_used = "warn"
-expect_used = "warn"
-panic = "warn"
-indexing_slicing = "warn"
-integer_division = "warn"
-string_slice = "warn"
+# Panic-freedom: library code must never panic. These are denied workspace-wide.
+# Tests are exempted via clippy.toml; the CLI binary relaxes the unwrap/expect
+# pair locally (see crates/profcast-cli/src/main.rs).
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+integer_division = "deny"
+modulo_arithmetic = "deny"
+arithmetic_side_effects = "deny"
+string_slice = "deny"
+unwrap_in_result = "deny"
+exit = "deny"
 lossy_float_literal = "warn"
 
 must_use_candidate = "warn"
@@ -84,5 +92,3 @@ too_many_arguments = "allow"
 struct_excessive_bools = "allow"
 missing_const_for_fn = "allow"
 implicit_hasher = "allow"
-
-multiple_crate_versions = "allow"

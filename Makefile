@@ -14,6 +14,10 @@ install:
 uninstall:
 	cargo uninstall profcast-cli
 
+.PHONY: lint
+lint: 
+	cargo lint
+
 .PHONY: test
 test::
 	cargo test --all-targets

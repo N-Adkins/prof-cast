@@ -1,4 +1,9 @@
-#![allow(missing_docs)] // unimportant for cli structures
+#![allow(missing_docs)]
+// unimportant for cli structures
+// The application boundary, not the library: failing fast is acceptable here,
+// so the never-panic lints are relaxed for the two canonical "fine in a binary"
+// cases. The library crates (core/formats/ffi) stay strict.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! CLI for profcast
 

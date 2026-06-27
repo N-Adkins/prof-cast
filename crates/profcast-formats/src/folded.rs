@@ -111,8 +111,8 @@ fn probe_content(buf: &[u8]) -> Confidence {
         match classify_line(line) {
             LineKind::Skip => {}
             LineKind::Stack(_) => {
-                valid += 1;
-                seen += 1;
+                valid = valid.saturating_add(1);
+                seen = seen.saturating_add(1);
             }
             // A single grammar violation means this isn't folded; the format is
             // line-oriented and homogeneous.
@@ -274,9 +274,13 @@ impl InputFormat for FoldedFormat {
                 LineKind::Skip => continue,
                 LineKind::Stack(line) => line,
                 LineKind::Invalid(reason) => {
-                    tracing::debug!(line = idx + 1, reason, "rejecting folded input");
+                    tracing::debug!(
+                        line = idx.saturating_add(1),
+                        reason,
+                        "rejecting folded input"
+                    );
                     return Err(ProfcastError::Parse {
-                        line: idx + 1,
+                        line: idx.saturating_add(1),
                         message: reason.to_owned(),
                     });
                 }
@@ -292,9 +296,9 @@ impl InputFormat for FoldedFormat {
                 .collect::<Vec<_>>();
 
             if stack.is_empty() {
-                tracing::debug!(line = idx + 1, "rejecting folded input");
+                tracing::debug!(line = idx.saturating_add(1), "rejecting folded input");
                 return Err(ProfcastError::Parse {
-                    line: idx + 1,
+                    line: idx.saturating_add(1),
                     message: "stack has no frames".to_owned(),
                 });
             }

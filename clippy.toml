@@ -1,0 +1,17 @@
+# The panic-family lints denied in Cargo.toml must hold for library and binary
+# code, but test code is allowed the ergonomic panicking helpers.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+
+# Pre-1.0: let the API-shaping lints fire on the public surface (and FFI) while
+# breaking changes are still cheap, instead of staying silent to protect it.
+avoid-breaking-exported-api = false
+
+# Panicking std methods the lint groups don't otherwise cover. Extend as needed.
+disallowed-methods = [
+    { path = "str::split_at", reason = "panics off a char boundary or past the end; use split_at_checked" },
+    { path = "slice::split_at", reason = "panics past the end; use split_at_checked" },
+    { path = "slice::chunks", reason = "panics on chunk size 0; ensure a non-zero size" },
+    { path = "slice::windows", reason = "panics on window size 0; ensure a non-zero size" },
+]

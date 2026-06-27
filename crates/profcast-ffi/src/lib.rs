@@ -44,6 +44,20 @@ fn set_last_error(message: impl Into<Vec<u8>>) {
     LAST_ERROR.with(|slot| *slot.borrow_mut() = Some(cstring));
 }
 
+/// Runs `op` and returns its value, converting any panic into the library's
+/// standard error path rather than letting it unwind across the C ABI (which
+/// aborts the process, and is undefined behavior on older toolchains). On a
+/// caught panic, records a generic last-error message and returns `fallback`.
+///
+/// `op` is treated as unwind-safe: when it panics, its captured state is
+/// discarded and `fallback` is returned, so no broken invariants are observed.
+fn catch_panic<T>(fallback: T, op: impl FnOnce() -> T) -> T {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(op)).unwrap_or_else(|_| {
+        set_last_error("internal error: caught a panic at the FFI boundary");
+        fallback
+    })
+}
+
 /// Allocates an owned C string the caller must release with
 /// [`profcast_string_free`]. Returns `NULL` on allocation/encoding failure.
 fn into_c_string(value: &str) -> *mut c_char {
@@ -147,17 +161,19 @@ pub unsafe extern "C" fn profcast_probe(
     // SAFETY: forwarding the caller's `filename` validity contract.
     let filename = unsafe { opt_str(filename) };
 
-    let probe = ProbeData {
-        filename,
-        buf: bytes,
-    };
-    registry().probe(&probe).map_or_else(
-        || {
-            set_last_error("no known format matched the input");
-            ptr::null_mut()
-        },
-        |matched| into_c_string(matched.format.name()),
-    )
+    catch_panic(ptr::null_mut(), || {
+        let probe = ProbeData {
+            filename,
+            buf: bytes,
+        };
+        registry().probe(&probe).map_or_else(
+            || {
+                set_last_error("no known format matched the input");
+                ptr::null_mut()
+            },
+            |matched| into_c_string(matched.format.name()),
+        )
+    })
 }
 
 /// Parses `len` bytes at `buf` into a profile handle.
@@ -185,32 +201,34 @@ pub unsafe extern "C" fn profcast_read(
     // SAFETY: forwarding the caller's `filename` validity contract.
     let filename = unsafe { opt_str(filename) };
 
-    let registry = registry();
-    let format = if let Some(name) = format_name {
-        let Some(format) = registry.by_name(name) else {
-            set_last_error(format!("unknown input format '{name}'"));
-            return ptr::null_mut();
+    catch_panic(ptr::null_mut(), || {
+        let registry = registry();
+        let format = if let Some(name) = format_name {
+            let Some(format) = registry.by_name(name) else {
+                set_last_error(format!("unknown input format '{name}'"));
+                return ptr::null_mut();
+            };
+            format
+        } else {
+            let probe = ProbeData {
+                filename,
+                buf: bytes,
+            };
+            let Some(matched) = registry.probe(&probe) else {
+                set_last_error("could not detect input format");
+                return ptr::null_mut();
+            };
+            matched.format
         };
-        format
-    } else {
-        let probe = ProbeData {
-            filename,
-            buf: bytes,
-        };
-        let Some(matched) = registry.probe(&probe) else {
-            set_last_error("could not detect input format");
-            return ptr::null_mut();
-        };
-        matched.format
-    };
 
-    match format.read(bytes) {
-        Ok(inner) => Box::into_raw(Box::new(Profile { inner })),
-        Err(error) => {
-            set_last_error(error.to_string());
-            ptr::null_mut()
+        match format.read(bytes) {
+            Ok(inner) => Box::into_raw(Box::new(Profile { inner })),
+            Err(error) => {
+                set_last_error(error.to_string());
+                ptr::null_mut()
+            }
         }
-    }
+    })
 }
 
 /// Serializes a profile into the named output format and returns it as an owned
@@ -237,32 +255,34 @@ pub unsafe extern "C" fn profcast_profile_write(
     // SAFETY: non-null and, per the contract, a live handle from profcast_read.
     let profile = unsafe { &*profile };
 
-    // SAFETY: forwarding the caller's `format` validity contract.
-    let Some(name) = (unsafe { opt_str(format) }) else {
-        set_last_error("output format name was null or not valid UTF-8");
-        return ptr::null_mut();
-    };
-
-    let Some(output) = registry().output_by_name(name) else {
-        set_last_error(format!("unknown output format '{name}'"));
-        return ptr::null_mut();
-    };
-
-    let bytes = match output.write(&profile.inner, WriteOptions::default()) {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            set_last_error(error.to_string());
+    catch_panic(ptr::null_mut(), || {
+        // SAFETY: forwarding the caller's `format` validity contract.
+        let Some(name) = (unsafe { opt_str(format) }) else {
+            set_last_error("output format name was null or not valid UTF-8");
             return ptr::null_mut();
-        }
-    };
+        };
 
-    String::from_utf8(bytes).map_or_else(
-        |_| {
-            set_last_error(format!("output format '{name}' produced non-text output"));
-            ptr::null_mut()
-        },
-        |text| into_c_string(&text),
-    )
+        let Some(output) = registry().output_by_name(name) else {
+            set_last_error(format!("unknown output format '{name}'"));
+            return ptr::null_mut();
+        };
+
+        let bytes = match output.write(&profile.inner, WriteOptions::default()) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                set_last_error(error.to_string());
+                return ptr::null_mut();
+            }
+        };
+
+        String::from_utf8(bytes).map_or_else(
+            |_| {
+                set_last_error(format!("output format '{name}' produced non-text output"));
+                ptr::null_mut()
+            },
+            |text| into_c_string(&text),
+        )
+    })
 }
 
 /// Frees a profile handle previously returned by [`profcast_read`].
