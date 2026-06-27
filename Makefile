@@ -33,7 +33,7 @@ lint:
 	cargo lint
 
 .PHONY: test
-test::
+test:
 	cargo test --all-targets
 
 .PHONY: miri-setup
