@@ -54,6 +54,29 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+
+    env:
+      # Fail the build on any rustdoc warning (broken links, bad HTML, etc).
+      # These are emitted by rustdoc, not clippy, so they need their own step.
+      RUSTDOCFLAGS: -D warnings
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup update stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Build documentation
+        run: cargo doc --workspace --all-features --no-deps --locked
+
   test:
     name: Test
     runs-on: ${{ matrix.os }}

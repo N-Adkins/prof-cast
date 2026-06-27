@@ -1,6 +1,7 @@
 //! The pprof profiling format (`perftools.profiles`): gzip-compressed protobuf.
 //!
-//! Wire types live in [`proto`]; this module maps them to and from [`Profile`].
+//! Wire types live in the private `proto` module; this module maps them to and
+//! from [`Profile`].
 //! Note the two orderings pprof inverts relative to the model: a sample's
 //! locations are leaf-first, and an inlined location's `line[0]` is innermost.
 
