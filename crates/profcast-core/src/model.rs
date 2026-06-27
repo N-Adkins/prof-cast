@@ -69,15 +69,17 @@ impl Profile {
     ///
     /// Returns [`ProfcastError::InvalidProfile`] describing the first violation
     /// found.
-    pub fn validate(&self) -> Result<()> {
-        let span = tracing::debug_span!(
-            "profile.validate",
+    #[tracing::instrument(
+        level = "debug",
+        name = "profile.validate",
+        skip_all,
+        fields(
             frames = self.frame_intern.len(),
             samples = self.samples.len(),
             value_kinds = self.value_kinds.len(),
-        );
-        let _guard = span.enter();
-
+        )
+    )]
+    pub fn validate(&self) -> Result<()> {
         let frame_count = self.frame_intern.len();
         let value_arity = self.value_kinds.len();
 

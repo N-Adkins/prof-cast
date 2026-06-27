@@ -6,7 +6,7 @@
 //! locations are leaf-first, and an inlined location's `line[0]` is innermost.
 
 /// Vendored prost types for the pprof wire format, generated from
-/// `proto/profile.proto`. Regenerate with `make proto`; the generated file is
+/// `proto/profile.proto`. Regenerate with `just proto`; the generated file is
 /// committed verbatim, so the build needs only the `prost` runtime.
 mod proto {
     #![allow(
@@ -436,10 +436,13 @@ impl InputFormat for PprofFormat {
         confidence
     }
 
+    #[tracing::instrument(
+        level = "debug",
+        name = "pprof.read",
+        skip_all,
+        fields(bytes = input.len())
+    )]
     fn read(&self, input: &[u8]) -> Result<Profile> {
-        let span = tracing::debug_span!("pprof.read", bytes = input.len());
-        let _guard = span.enter();
-
         let bytes = decode_payload(input)?;
         let proto = proto::Profile::decode(bytes.as_slice())
             .map_err(|error| ProfcastError::Decode(format!("invalid pprof protobuf: {error}")))?;
@@ -466,9 +469,13 @@ impl OutputFormat for PprofFormat {
         &["pprof", "pb", "gz"]
     }
 
+    #[tracing::instrument(
+        level = "debug",
+        name = "pprof.write",
+        skip_all,
+        fields(samples = profile.samples.len())
+    )]
     fn write(&self, profile: &Profile, _options: WriteOptions) -> Result<Vec<u8>> {
-        let span = tracing::debug_span!("pprof.write", samples = profile.samples.len());
-        let _guard = span.enter();
         write_profile(profile)
     }
 }

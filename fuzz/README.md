@@ -17,9 +17,9 @@ sanitizer flags.
 ## Running
 
 ```sh
-make fuzz-install          # one-time: cargo install cargo-fuzz
-cargo fuzz list            # list targets
-make fuzz t=folded_read    # run a target
+just fuzz-install          # one-time: cargo install cargo-fuzz
+just fuzz-list             # list targets
+just fuzz folded_read      # run a target
 ```
 
 ## Adding a format

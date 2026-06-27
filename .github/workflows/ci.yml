@@ -183,14 +183,14 @@ jobs:
         with:
           version: "1.20.1"
 
-      - name: Install cbindgen
-        run: cargo binstall --no-confirm --force cbindgen
+      - name: Install cbindgen and just
+        run: cargo binstall --no-confirm --force cbindgen just
 
       - name: Generate C header
-        run: make header
+        run: just header
 
       - name: Check generated header is committed
-        run: make check-header
+        run: just check-header
 
       - name: Build FFI crate
         run: cargo build -p profcast-ffi --release --locked

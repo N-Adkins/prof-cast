@@ -264,10 +264,13 @@ impl InputFormat for FoldedFormat {
         confidence
     }
 
+    #[tracing::instrument(
+        level = "debug",
+        name = "folded.read",
+        skip_all,
+        fields(bytes = input.len())
+    )]
     fn read(&self, input: &[u8]) -> Result<Profile> {
-        let span = tracing::debug_span!("folded.read", bytes = input.len());
-        let _guard = span.enter();
-
         let text = std::str::from_utf8(input)?;
 
         let mut interner = FrameInterner::default();
@@ -365,10 +368,13 @@ impl OutputFormat for FoldedFormat {
         &["folded", "collapsed"]
     }
 
+    #[tracing::instrument(
+        level = "debug",
+        name = "folded.write",
+        skip_all,
+        fields(samples = profile.samples.len())
+    )]
     fn write(&self, profile: &Profile, _options: WriteOptions) -> Result<Vec<u8>> {
-        let span = tracing::debug_span!("folded.write", samples = profile.samples.len());
-        let _guard = span.enter();
-
         let frame_count = profile.frame_intern.len();
         let mut out = String::new();
 

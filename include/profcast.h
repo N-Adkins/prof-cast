@@ -14,10 +14,10 @@ struct profcast_Profile;
 
 /**
  * Returns a null-terminated string showing the program name and version,
- * eg. "profcast 0.1.0".
+ * eg. `"profcast 0.1.0"`.
  *
  * In the case of an internal library error for this, it will
- * return "profcast <unknown>".
+ * return `"profcast <unknown>"`.
  */
 const char *profcast_version(void);
 

@@ -34,11 +34,12 @@ The CLI is written to `target/release/profcast`.
 To install the `profcast` binary into Cargo's bin directory (`~/.cargo/bin`):
 
 ```sh
-make install
+just install
 ```
 
 This wraps `cargo install --path crates/profcast-cli`. Remove it again with
-`make uninstall`.
+`just uninstall`. (Recipes use [`just`](https://github.com/casey/just); install
+it with `cargo install just`.)
 
 ## Usage
 
@@ -64,7 +65,7 @@ more verbose logging.
 with cbindgen and committed at `include/profcast.h`:
 
 ```sh
-make header
+just header
 ```
 
 ## License

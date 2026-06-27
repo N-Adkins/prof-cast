@@ -8,36 +8,42 @@ pass before it is merged.
 A stable Rust toolchain is required for everyday work. Miri and the fuzz targets
 additionally require a nightly toolchain.
 
+Common tasks are wrapped in a [`just`](https://github.com/casey/just) recipe file
+(`justfile`). Install it with `cargo install just` (or `cargo binstall just`) and
+run `just` to list the available recipes.
+
 The minimum supported Rust version (MSRV) is 1.85, which CI verifies on every
 pull request. Avoid language or dependency features that would raise it.
 
 ## Checks
 
-CI runs the following on every pull request. Run them locally before pushing:
+Before pushing, run the pre-commit gate, which mirrors every CI job except the
+heavier MSRV and Miri runs (formatting, Clippy, docs, tests, the
+no-default-features check, and the C-header sync check):
 
 ```sh
-cargo fmt --all
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo build --workspace --all-features --locked
-cargo test --workspace --all-features --locked
-cargo check --workspace --no-default-features --locked
+just check
 ```
 
-If you change `profcast-ffi`, regenerate the C header and confirm it is in sync:
+Each underlying job is also available on its own — `just fmt-check`, `just
+clippy`, `just docs`, `just test`, `just no-default-features`, and `just
+check-header` — and `just fmt` formats the workspace in place. The committed C
+header at `include/profcast.h` must match cbindgen's output; `just check-header`
+regenerates it and fails if it has drifted.
+
+To run the complete CI surface locally, including MSRV and Miri:
 
 ```sh
-make check-header
+just ci
 ```
-
-The committed header at `include/profcast.h` must match the generated output.
 
 Optionally, run the test suite under Miri to catch undefined behaviour, and
 exercise the fuzz targets:
 
 ```sh
-make miri-setup    # one-time: install the nightly miri component
-make miri
-make fuzz target=<fuzz-target>
+just miri-setup    # one-time: install the nightly miri component
+just miri
+just fuzz <fuzz-target>
 ```
 
 See `fuzz/README.md` for the available fuzz targets.
