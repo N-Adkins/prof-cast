@@ -7,6 +7,7 @@ use crate::{Result, model::Profile};
 /// Describes how confident we are that a probe describes
 /// a specific format
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum Confidence {
     /// Something is completely wrong and we are positive
     /// the format does not match

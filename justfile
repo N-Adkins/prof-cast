@@ -4,7 +4,7 @@
 set windows-shell := ["cmd.exe", "/c"]
 
 PPROF_PROTO_DIR := "crates/profcast-formats/proto"
-PPROF_GEN       := "crates/profcast-formats/src/pprof/proto.gen.rs"
+PPROF_GEN := "crates/profcast-formats/src/pprof/proto.gen.rs"
 
 # Treat rustdoc warnings (broken links, bad HTML) as errors, matching CI's docs
 # job. Only rustdoc and doctests read this, so exporting it globally is harmless.
@@ -50,6 +50,14 @@ no-default-features:
 msrv:
     cargo +1.85.0 build --workspace --all-features --locked
 
+# Install cargo-semver-checks (also needs a nightly toolchain for rustdoc JSON)
+semver-checks-install:
+    cargo install cargo-semver-checks
+
+# Check the public API for SemVer breakage vs a baseline git rev (default: main)
+semver-checks rev="main":
+    cargo semver-checks --workspace --baseline-rev {{ rev }}
+
 # Regenerate the C header from the FFI crate
 header:
     cbindgen crates/profcast-ffi --config cbindgen.toml --output include/profcast.h
@@ -89,7 +97,7 @@ fuzz-list:
 
 # Run a fuzz target: just fuzz <target> [secs]
 fuzz target secs="":
-    cargo +nightly fuzz run {{target}} {{ if secs != "" { "-- -max_total_time=" + secs } else { "" } }}
+    cargo +nightly fuzz run {{ target }} {{ if secs != "" { "-- -max_total_time=" + secs } else { "" } }}
 
 # Regenerate the vendored pprof prost types.
 #
@@ -101,7 +109,7 @@ proto:
     #!/usr/bin/env bash
     set -euo pipefail
     tmp=$(mktemp -d)
-    protoc --prost_out="$tmp" -I {{PPROF_PROTO_DIR}} {{PPROF_PROTO_DIR}}/profile.proto
-    mv "$(find "$tmp" -name '*.rs')" {{PPROF_GEN}}
+    protoc --prost_out="$tmp" -I {{ PPROF_PROTO_DIR }} {{ PPROF_PROTO_DIR }}/profile.proto
+    mv "$(find "$tmp" -name '*.rs')" {{ PPROF_GEN }}
     rm -rf "$tmp"
-    echo "regenerated {{PPROF_GEN}}"
+    echo "regenerated {{ PPROF_GEN }}"

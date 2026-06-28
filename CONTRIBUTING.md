@@ -48,6 +48,21 @@ just fuzz <fuzz-target>
 
 See `fuzz/README.md` for the available fuzz targets.
 
+## SemVer
+
+The public API is checked for accidental SemVer-breaking changes with
+[`cargo-semver-checks`](https://github.com/obi1kenobi/cargo-semver-checks). On
+pull requests an advisory CI job diffs the branch against the base commit; it
+reports breakage but does not block merges, since the crate is pre-1.0 and
+breaking changes are still expected. Run it locally against `main` with:
+
+```sh
+just semver-checks-install   # one-time: needs a nightly toolchain for rustdoc JSON
+just semver-checks           # or: just semver-checks rev=<git-rev>
+```
+
+Once the API stabilizes for 1.0, promote the CI job to a required check.
+
 ## Pull requests
 
 Keep changes focused and explain the motivation in the description. New input or

@@ -194,3 +194,42 @@ jobs:
 
       - name: Build FFI crate
         run: cargo build -p profcast-ffi --release --locked
+
+  semver-checks:
+    name: SemVer checks (advisory)
+    runs-on: ubuntu-latest
+    # Only meaningful on PRs, where there is a base revision to diff against.
+    if: github.event_name == 'pull_request'
+    # Pre-1.0 we break the API freely, so this reports but does not gate merges.
+    # Promote it to a required check once the surface stabilizes for 1.0.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # cargo-semver-checks builds the baseline from git history, so the
+          # base commit must be present in the checkout.
+          fetch-depth: 0
+
+      - name: Install Rust
+        run: rustup update stable
+
+      # rustdoc JSON, which cargo-semver-checks consumes, is nightly-only.
+      - name: Install nightly toolchain
+        run: rustup toolchain install nightly --profile minimal
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.20.1
+        with:
+          version: "1.20.1"
+
+      - name: Install cargo-semver-checks
+        run: cargo binstall --no-confirm --force cargo-semver-checks
+
+      - name: Check for SemVer breakage
+        run: cargo semver-checks --workspace --baseline-rev "${{ github.event.pull_request.base.sha }}"
