@@ -65,19 +65,26 @@ fn classify_line(line: &str) -> LineKind<'_> {
     // is the stack. Splitting from the right keeps frames that contain spaces
     // (e.g. `Foo::bar(int, int)`) intact.
     let Some((stack, count)) = line.rsplit_once(char::is_whitespace) else {
-        return LineKind::Invalid("missing whitespace-separated sample count");
+        // A lone non-negative integer is a frameless sample (py-spy emits these);
+        // accept it as an empty, skipped stack. Any other lone token is malformed.
+        return match line.parse::<i64>() {
+            Ok(count) if count >= 0 => LineKind::Skip,
+            _ => LineKind::Invalid("missing whitespace-separated sample count"),
+        };
     };
 
     let stack = stack.trim_end();
-    if stack.is_empty() {
-        return LineKind::Invalid("empty stack");
-    }
 
     let Ok(count) = count.trim().parse::<i64>() else {
         return LineKind::Invalid("sample count is not an integer");
     };
     if count < 0 {
         return LineKind::Invalid("sample count is negative");
+    }
+
+    // A stack of only whitespace or separators (e.g. `;; 1`) is frameless too.
+    if stack.is_empty() {
+        return LineKind::Skip;
     }
 
     LineKind::Stack(FoldedLine { stack, count })
@@ -303,11 +310,8 @@ impl InputFormat for FoldedFormat {
                 .collect::<Vec<_>>();
 
             if stack.is_empty() {
-                tracing::debug!(line = idx.saturating_add(1), "rejecting folded input");
-                return Err(ProfcastError::Parse {
-                    line: idx.saturating_add(1),
-                    message: "stack has no frames".to_owned(),
-                });
+                // Frameless sample (e.g. a line of only `;`); skip it.
+                continue;
             }
 
             samples.push(Sample {
@@ -461,6 +465,26 @@ mod tests {
         let profile = profile_of("a;;b; 4\n");
         let labels: Vec<_> = profile.frames.iter().map(|f| f.raw.as_str()).collect();
         assert_eq!(labels, ["a", "b"]);
+    }
+
+    #[test]
+    fn skips_frameless_samples() {
+        // py-spy emits a bare count for a sample with no frame; a `;`-only stack
+        // is frameless too. Both are skipped, not rejected.
+        let profile = profile_of("main;work 3\n1\n;; 2\n");
+        assert_eq!(profile.samples.len(), 1);
+        assert_eq!(profile.samples[0].values, vec![3]);
+    }
+
+    #[test]
+    fn bare_numbers_are_not_likely_folded() {
+        // A frameless line is no positive evidence, so a column of numbers must
+        // not auto-detect as folded.
+        let data = ProbeData {
+            filename: None,
+            buf: b"1\n2\n3\n",
+        };
+        assert_ne!(FoldedFormat.probe(&data), Confidence::Likely);
     }
 
     #[test]

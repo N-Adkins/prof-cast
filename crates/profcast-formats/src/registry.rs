@@ -8,7 +8,9 @@
 
 use profcast_core::format::{Confidence, InputFormat, OutputFormat, ProbeData};
 
-use crate::{folded::FoldedFormat, json::JsonFormat, pprof::PprofFormat};
+use crate::{
+    folded::FoldedFormat, json::JsonFormat, pprof::PprofFormat, speedscope::SpeedscopeFormat,
+};
 
 /// The outcome of a successful probe: which format matched and how strongly.
 #[derive(Debug, Clone, Copy)]
@@ -46,6 +48,7 @@ impl Registry {
         registry.register_output(Box::new(FoldedFormat));
         registry.register_output(Box::new(PprofFormat));
         registry.register_output(Box::new(JsonFormat));
+        registry.register_output(Box::new(SpeedscopeFormat));
         registry
     }
 
@@ -238,6 +241,7 @@ mod tests {
         assert!(registry.output_by_name("json").is_some());
         assert!(registry.output_by_name("folded").is_some());
         assert!(registry.output_by_name("pprof").is_some());
+        assert!(registry.output_by_name("speedscope").is_some());
         assert!(registry.output_by_name("nonexistent").is_none());
     }
 
