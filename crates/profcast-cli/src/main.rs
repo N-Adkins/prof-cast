@@ -8,9 +8,11 @@
 //! CLI for profcast
 
 use std::io::{Read, Write};
+use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use clap::{Parser, Subcommand};
+use profcast_capture::{CaptureSpec, Sources, Target};
 use profcast_core::{
     format::{OutputFormat, ProbeData, WriteOptions},
     model::Profile,
@@ -42,6 +44,44 @@ enum Command {
         from: Option<String>,
 
         /// Output format name (e.g. `json`). Inferred from the output file
+        /// extension when omitted, falling back to `json`.
+        #[arg(long)]
+        to: Option<String>,
+    },
+
+    /// Sample a running process (or this one) into a profile and write it out.
+    ///
+    /// Use `-` for `output` to write to stdout.
+    Record {
+        output: String,
+
+        /// PID of the process to profile.
+        #[arg(long, conflicts_with_all = ["self_target", "program"])]
+        pid: Option<u32>,
+
+        /// Profile this `profcast` process itself (useful as a smoke test).
+        #[arg(long = "self", conflicts_with = "program")]
+        self_target: bool,
+
+        /// Launch a program and profile it from start to exit, e.g.
+        /// `--program "/usr/bin/grep -r foo ."`.
+        #[arg(long)]
+        program: Option<String>,
+
+        /// Sampling frequency in hertz.
+        #[arg(long, default_value_t = 99)]
+        freq: u32,
+
+        /// How long to sample, in seconds. Defaults to until the target exits
+        /// (or a fixed window when profiling self).
+        #[arg(long)]
+        duration: Option<f64>,
+
+        /// Capture backend name (e.g. `perf`). Defaults to the first available.
+        #[arg(long)]
+        source: Option<String>,
+
+        /// Output format name (e.g. `folded`). Inferred from the output file
         /// extension when omitted, falling back to `json`.
         #[arg(long)]
         to: Option<String>,
@@ -198,6 +238,66 @@ fn run_convert(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn run_record(
+    registry: &Registry,
+    output: &str,
+    pid: Option<u32>,
+    self_target: bool,
+    program: Option<&str>,
+    freq: u32,
+    duration: Option<f64>,
+    source: Option<&str>,
+    to: Option<&str>,
+) -> anyhow::Result<()> {
+    // clap enforces that at most one target is set; reject the empty case here.
+    let target = match (pid, self_target, program) {
+        (Some(pid), _, _) => Target::Pid(pid),
+        (_, true, _) => Target::Current,
+        (_, _, Some(command)) => {
+            let argv = shlex::split(command)
+                .filter(|argv| !argv.is_empty())
+                .context("could not parse --program command line")?;
+            Target::Command(argv)
+        }
+        (None, false, None) => {
+            bail!("choose a target: --pid <PID>, --self, or --program \"<cmd>\"")
+        }
+    };
+
+    let sources = Sources::with_builtins();
+    let backend = match source {
+        Some(name) => sources
+            .by_name(name)
+            .with_context(|| format!("unknown capture source '{name}'"))?,
+        None => sources
+            .available()
+            .context("no capture backend is available on this platform")?,
+    };
+    if !backend.available() {
+        bail!(
+            "capture source '{}' is not available on this host (check permissions / platform support)",
+            backend.name()
+        );
+    }
+
+    let spec = CaptureSpec {
+        target,
+        frequency_hz: freq,
+        duration: duration.map(Duration::from_secs_f64),
+    };
+    let profile = backend
+        .capture(&spec)
+        .with_context(|| format!("capture with '{}' failed", backend.name()))?;
+
+    let format = resolve_output(registry, output, to)?;
+    let encoded = format
+        .write(&profile, WriteOptions { pretty: true })
+        .with_context(|| format!("failed to encode profile as '{}'", format.name()))?;
+    write_output(output, &encoded)?;
+    Ok(())
+}
+
 fn run_dump(
     registry: &Registry,
     input: &str,
@@ -233,6 +333,26 @@ fn main() -> anyhow::Result<()> {
             from,
             to,
         } => run_convert(&registry, &input, &output, from.as_deref(), to.as_deref()),
+        Command::Record {
+            output,
+            pid,
+            self_target,
+            program,
+            freq,
+            duration,
+            source,
+            to,
+        } => run_record(
+            &registry,
+            &output,
+            pid,
+            self_target,
+            program.as_deref(),
+            freq,
+            duration,
+            source.as_deref(),
+            to.as_deref(),
+        ),
         Command::Dump {
             input,
             from,

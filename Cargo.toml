@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/profcast-capture",
     "crates/profcast-cli",
     "crates/profcast-core",
     "crates/profcast-ffi",
@@ -34,6 +35,11 @@ regex = { version = "1", default-features = false, features = ["std"] }
 # pprof: prost is runtime-only (codegen is vendored); flate2 for gzip.
 prost = "0.14"
 flate2 = "1"
+# Linux capture backend: raw perf_event_open syscall + ELF symbolization.
+libc = "0.2"
+object = { version = "0.36", default-features = false, features = ["read", "std"] }
+# Shell-style splitting of the `record --program` command line.
+shlex = "1"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
