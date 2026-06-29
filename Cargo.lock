@@ -295,6 +295,7 @@ dependencies = [
  "flate2",
  "profcast-core",
  "prost",
+ "serde",
  "serde_json",
  "tracing",
 ]
