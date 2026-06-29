@@ -167,7 +167,7 @@ mod tests {
         };
 
         let profile = Profile {
-            frame_intern: vec![Frame {
+            frames: vec![Frame {
                 function: Some("main".to_owned()),
                 ..Frame::default()
             }],

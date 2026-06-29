@@ -323,7 +323,7 @@ impl InputFormat for FoldedFormat {
         );
 
         Ok(Profile {
-            frame_intern: interner.frames,
+            frames: interner.frames,
             samples,
             value_kinds: vec![ValueKind {
                 kind: "samples".to_owned(),
@@ -375,7 +375,7 @@ impl OutputFormat for FoldedFormat {
         fields(samples = profile.samples.len())
     )]
     fn write(&self, profile: &Profile, _options: WriteOptions) -> Result<Vec<u8>> {
-        let frame_count = profile.frame_intern.len();
+        let frame_count = profile.frames.len();
         let mut out = String::new();
 
         for (index, sample) in profile.samples.iter().enumerate() {
@@ -388,7 +388,7 @@ impl OutputFormat for FoldedFormat {
 
             // Stack is outermost (root) first, frames joined by `;`.
             for (position, frame_id) in sample.stack.iter().enumerate() {
-                let Some(frame) = profile.frame_intern.get(frame_id.0 as usize) else {
+                let Some(frame) = profile.frames.get(frame_id.0 as usize) else {
                     let message = format!(
                         "sample {index} references frame id {} but only {frame_count} frames are interned",
                         frame_id.0,
@@ -429,11 +429,7 @@ mod tests {
         assert_eq!(profile.value_kinds[0].kind, "samples");
 
         // `a`, `b`, `c` interned once each, in first-seen order.
-        let labels: Vec<_> = profile
-            .frame_intern
-            .iter()
-            .map(|f| f.raw.as_str())
-            .collect();
+        let labels: Vec<_> = profile.frames.iter().map(|f| f.raw.as_str()).collect();
         assert_eq!(labels, ["a", "b", "c"]);
 
         assert_eq!(
@@ -455,11 +451,7 @@ mod tests {
     #[test]
     fn keeps_frames_containing_spaces() {
         let profile = profile_of("Foo::bar(int, int);baz 7\n");
-        let labels: Vec<_> = profile
-            .frame_intern
-            .iter()
-            .map(|f| f.raw.as_str())
-            .collect();
+        let labels: Vec<_> = profile.frames.iter().map(|f| f.raw.as_str()).collect();
         assert_eq!(labels, ["Foo::bar(int, int)", "baz"]);
         assert_eq!(profile.samples[0].values, vec![7]);
     }
@@ -467,11 +459,7 @@ mod tests {
     #[test]
     fn tolerates_stray_semicolons() {
         let profile = profile_of("a;;b; 4\n");
-        let labels: Vec<_> = profile
-            .frame_intern
-            .iter()
-            .map(|f| f.raw.as_str())
-            .collect();
+        let labels: Vec<_> = profile.frames.iter().map(|f| f.raw.as_str()).collect();
         assert_eq!(labels, ["a", "b"]);
     }
 
@@ -607,7 +595,7 @@ mod tests {
     fn read_populates_structured_frame_fields() {
         let profile = profile_of("main (app.py:7);brk (libc.so.6) 4\n");
         let fields: Vec<_> = profile
-            .frame_intern
+            .frames
             .iter()
             .map(|frame| {
                 (
@@ -653,7 +641,7 @@ mod tests {
         // Frames sourced from another format carry no `raw`; the label is
         // rebuilt from the structured fields, mirroring `parse_frame`.
         let profile = Profile {
-            frame_intern: vec![
+            frames: vec![
                 Frame {
                     function: Some("main".to_owned()),
                     file: Some("main.rs".to_owned()),
@@ -686,7 +674,7 @@ mod tests {
         // pprof frames carry both a function name and an instruction address;
         // folded should render the symbol, not the hex address.
         let profile = Profile {
-            frame_intern: vec![Frame {
+            frames: vec![Frame {
                 function: Some("main.serve".to_owned()),
                 file: Some("server.go".to_owned()),
                 line: Some(51),
@@ -708,7 +696,7 @@ mod tests {
     #[test]
     fn write_uses_only_the_first_value_series() {
         let profile = Profile {
-            frame_intern: vec![Frame {
+            frames: vec![Frame {
                 raw: "a".to_owned(),
                 ..Frame::default()
             }],
@@ -733,7 +721,7 @@ mod tests {
     #[test]
     fn write_rejects_dangling_frame_id() {
         let profile = Profile {
-            frame_intern: vec![Frame::default()],
+            frames: vec![Frame::default()],
             samples: vec![Sample {
                 stack: vec![FrameId(7)],
                 values: vec![1],
@@ -752,7 +740,7 @@ mod tests {
     #[test]
     fn write_rejects_sample_without_value() {
         let profile = Profile {
-            frame_intern: vec![Frame {
+            frames: vec![Frame {
                 raw: "a".to_owned(),
                 ..Frame::default()
             }],

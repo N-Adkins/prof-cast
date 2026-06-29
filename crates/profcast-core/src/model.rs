@@ -24,7 +24,7 @@ pub struct Frame {
     pub address: Option<u64>,
 }
 
-/// Stable index for a [`Frame`] in [`Profile::frame_intern`]
+/// Stable index for a [`Frame`] in [`Profile::frames`]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FrameId(pub u32);
 
@@ -50,7 +50,7 @@ pub struct ValueKind {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Profile {
     /// Interned set of [`Frame`]s
-    pub frame_intern: Vec<Frame>,
+    pub frames: Vec<Frame>,
     /// Profiler [`Sample`]s
     pub samples: Vec<Sample>,
     /// Profiler [`ValueKind`] dictionary
@@ -60,7 +60,7 @@ pub struct Profile {
 impl Profile {
     /// Checks that the profile upholds the data model's structural invariants:
     /// every sample carries exactly one value per declared [`ValueKind`], and
-    /// every [`FrameId`] in every stack points into [`Profile::frame_intern`].
+    /// every [`FrameId`] in every stack points into [`Profile::frames`].
     ///
     /// Format readers should produce valid profiles; this is a defensive check
     /// for fuzzing, tests, and untrusted inputs crossing the FFI boundary.
@@ -74,13 +74,13 @@ impl Profile {
         name = "profile.validate",
         skip_all,
         fields(
-            frames = self.frame_intern.len(),
+            frames = self.frames.len(),
             samples = self.samples.len(),
             value_kinds = self.value_kinds.len(),
         )
     )]
     pub fn validate(&self) -> Result<()> {
-        let frame_count = self.frame_intern.len();
+        let frame_count = self.frames.len();
         let value_arity = self.value_kinds.len();
 
         for (index, sample) in self.samples.iter().enumerate() {
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn valid_profile_passes() {
         let profile = Profile {
-            frame_intern: vec![Frame::default(), Frame::default()],
+            frames: vec![Frame::default(), Frame::default()],
             samples: vec![Sample {
                 stack: vec![FrameId(0), FrameId(1)],
                 values: vec![1],
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn dangling_frame_id_is_rejected() {
         let profile = Profile {
-            frame_intern: vec![Frame::default()],
+            frames: vec![Frame::default()],
             samples: vec![Sample {
                 stack: vec![FrameId(5)],
                 values: vec![1],
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn value_arity_mismatch_is_rejected() {
         let profile = Profile {
-            frame_intern: vec![Frame::default()],
+            frames: vec![Frame::default()],
             samples: vec![Sample {
                 stack: vec![FrameId(0)],
                 values: vec![1, 2],

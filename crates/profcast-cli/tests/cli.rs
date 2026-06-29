@@ -66,7 +66,7 @@ fn convert_file_to_stdout_emits_pretty_json() {
         String::from_utf8_lossy(&output.stderr),
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("\"frame_intern\""));
+    assert!(stdout.contains("\"frames\""));
     assert!(stdout.contains("\"raw\": \"main\""));
     // Pretty output is indented across many lines.
     assert!(stdout.matches('\n').count() > 1);

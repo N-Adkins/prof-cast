@@ -227,7 +227,7 @@ fn convert_from_proto(proto: &proto::Profile) -> Result<Profile> {
     }
 
     Ok(Profile {
-        frame_intern: interner.frames,
+        frames: interner.frames,
         samples,
         value_kinds,
     })
@@ -311,9 +311,9 @@ fn convert_to_proto(profile: &Profile) -> proto::Profile {
     let mut mapping_ids: HashMap<String, u64> = HashMap::new();
     let mut mappings: Vec<proto::Mapping> = Vec::new();
     let mut functions: Vec<proto::Function> = Vec::new();
-    let mut locations: Vec<proto::Location> = Vec::with_capacity(profile.frame_intern.len());
+    let mut locations: Vec<proto::Location> = Vec::with_capacity(profile.frames.len());
 
-    for (index, frame) in profile.frame_intern.iter().enumerate() {
+    for (index, frame) in profile.frames.iter().enumerate() {
         let id = frame_id_to_pprof(index);
 
         let mapping_id = frame.module.as_ref().map_or(0, |module| {
@@ -450,7 +450,7 @@ impl InputFormat for PprofFormat {
         let profile = convert_from_proto(&proto)?;
         tracing::debug!(
             samples = profile.samples.len(),
-            frames = profile.frame_intern.len(),
+            frames = profile.frames.len(),
             "parsed pprof profile",
         );
         Ok(profile)
@@ -487,7 +487,7 @@ mod tests {
 
     fn sample_profile() -> Profile {
         Profile {
-            frame_intern: vec![
+            frames: vec![
                 Frame {
                     function: Some("main".to_owned()),
                     file: Some("main.rs".to_owned()),
@@ -629,13 +629,13 @@ mod tests {
         );
 
         // Frames are interned in location order: main (id 1) then work (id 2).
-        assert_eq!(profile.frame_intern.len(), 2);
-        let main = &profile.frame_intern[0];
+        assert_eq!(profile.frames.len(), 2);
+        let main = &profile.frames[0];
         assert_eq!(main.function.as_deref(), Some("main"));
         assert_eq!(main.file.as_deref(), Some("main.go"));
         assert_eq!(main.line, Some(10));
         assert_eq!(main.module.as_deref(), Some("/app/bin"));
-        let work = &profile.frame_intern[1];
+        let work = &profile.frames[1];
         assert_eq!(work.function.as_deref(), Some("work"));
         assert_eq!(work.line, Some(20));
 
@@ -697,7 +697,7 @@ mod tests {
         let labels: Vec<_> = parsed.samples[0]
             .stack
             .iter()
-            .map(|id| parsed.frame_intern[id.0 as usize].function.as_deref())
+            .map(|id| parsed.frames[id.0 as usize].function.as_deref())
             .collect();
         // Stack is root-first: caller (printf) then leaf (memcpy).
         assert_eq!(labels, vec![Some("printf"), Some("memcpy")]);

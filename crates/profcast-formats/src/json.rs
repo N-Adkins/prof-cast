@@ -46,7 +46,7 @@ mod tests {
 
     fn sample_profile() -> Profile {
         Profile {
-            frame_intern: vec![Frame {
+            frames: vec![Frame {
                 raw: "main".to_owned(),
                 ..Frame::default()
             }],
