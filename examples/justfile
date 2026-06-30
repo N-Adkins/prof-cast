@@ -1,0 +1,33 @@
+# Native example workloads for exercising profcast's live capture.
+# Run `just` in this directory to list recipes.
+
+set windows-shell := ["cmd.exe", "/c"]
+
+BIN := "cpp_workload"
+BUILD := "build"
+
+# Path to the built binary (CMake puts it straight in build/; .exe on Windows).
+PROG := if os_family() == "windows" { BUILD / BIN + ".exe" } else { "./" + BUILD / BIN }
+
+# List available recipes
+default:
+    @just --list
+
+# Configure + build with CMake. CMake finds the default toolchain (MSVC on Windows,
+# cc/c++ on Unix); pass configure flags to pick another, e.g.:
+#   just build "-D CMAKE_CXX_COMPILER=clang++"   # Linux/macOS: clang (or g++ for GCC)
+#   just build "-T ClangCL"                       # Windows: clang-cl
+#   just build "-G Ninja -D CMAKE_CXX_COMPILER=clang++"   # Windows: GNU clang++
+# Switching toolchains needs a fresh build dir — run `just clean` first.
+build *FLAGS:
+    cmake -B {{ BUILD }} {{ FLAGS }}
+    cmake --build {{ BUILD }} --config Release
+
+# Build, then capture a profile into build/out.speedscope.json (open at speedscope.app).
+# Pass extra record flags after `--`, e.g. `just record -- --freq 500`.
+record *ARGS: build
+    cargo run -q -p profcast-cli -- record {{ BUILD }}/out.speedscope.json --program "{{ PROG }}" --freq 250 --to speedscope {{ ARGS }}
+
+# Remove the build/ directory
+clean:
+    cmake -E rm -rf {{ BUILD }}

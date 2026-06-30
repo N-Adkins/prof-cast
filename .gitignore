@@ -3,3 +3,6 @@
 .cache/
 .vscode/
 .zed/
+
+# Native example build artifacts (binaries, PDBs, captured profiles)
+/examples/build/

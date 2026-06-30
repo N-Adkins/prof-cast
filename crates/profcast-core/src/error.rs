@@ -38,4 +38,13 @@ pub enum ProfcastError {
     /// A binary format's wire representation could not be decoded
     #[error("decode error: {0}")]
     Decode(String),
+
+    /// A live [`Source`](crate::capture::Source) failed while sampling
+    #[error("capture error: {0}")]
+    Capture(String),
+
+    /// A requested operation is not supported on this host (wrong platform,
+    /// missing kernel feature, insufficient permissions)
+    #[error("unsupported: {0}")]
+    Unsupported(String),
 }

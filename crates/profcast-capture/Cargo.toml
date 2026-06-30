@@ -1,0 +1,31 @@
+[package]
+name = "profcast-capture"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Live profile capture backends for profcast"
+
+[lints]
+workspace = true
+
+[dependencies]
+tracing.workspace = true
+profcast-core = { path = "../profcast-core" }
+
+# The Linux backend is the only one that needs the raw syscall and an ELF
+# reader; gating these by target keeps non-Linux builds (and the
+# no-default-features check) free of them.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+object.workspace = true
+
+# The Windows backend drives DbgHelp / Tool Help / thread suspension through
+# the raw Win32 bindings; gated so non-Windows builds never pull it in.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys.workspace = true
