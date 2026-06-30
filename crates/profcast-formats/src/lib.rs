@@ -1,6 +1,7 @@
 //! Crate to store all of the different format "codecs" - specifies
 //! their formats and probing of them, parsing, etc
 
+pub mod chrometrace;
 pub mod folded;
 pub mod json;
 pub mod pprof;

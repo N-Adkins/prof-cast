@@ -9,7 +9,8 @@
 use profcast_core::format::{Confidence, InputFormat, OutputFormat, ProbeData};
 
 use crate::{
-    folded::FoldedFormat, json::JsonFormat, pprof::PprofFormat, speedscope::SpeedscopeFormat,
+    chrometrace::ChromeTraceFormat, folded::FoldedFormat, json::JsonFormat, pprof::PprofFormat,
+    speedscope::SpeedscopeFormat,
 };
 
 /// The outcome of a successful probe: which format matched and how strongly.
@@ -45,10 +46,12 @@ impl Registry {
         let mut registry = Self::new();
         registry.register(Box::new(FoldedFormat));
         registry.register(Box::new(PprofFormat));
+        registry.register(Box::new(ChromeTraceFormat));
         registry.register_output(Box::new(FoldedFormat));
         registry.register_output(Box::new(PprofFormat));
         registry.register_output(Box::new(JsonFormat));
         registry.register_output(Box::new(SpeedscopeFormat));
+        registry.register_output(Box::new(ChromeTraceFormat));
         registry
     }
 

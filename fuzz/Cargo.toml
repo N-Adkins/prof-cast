@@ -52,6 +52,20 @@ doc = false
 bench = false
 
 [[bin]]
+name = "chrometrace_probe"
+path = "fuzz_targets/chrometrace_probe.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "chrometrace_read"
+path = "fuzz_targets/chrometrace_read.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "c_api"
 path = "fuzz_targets/c_api.rs"
 test = false
