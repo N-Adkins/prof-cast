@@ -107,7 +107,8 @@ impl Launched {
         }
         let mut status: libc::c_int = 0;
         // SAFETY: waiting on our own child pid without blocking.
-        let rc = unsafe { libc::waitpid(self.pid as i32, ptr::from_mut(&mut status), libc::WNOHANG) };
+        let rc =
+            unsafe { libc::waitpid(self.pid as i32, ptr::from_mut(&mut status), libc::WNOHANG) };
         if rc == 0 {
             return false; // Still running.
         }

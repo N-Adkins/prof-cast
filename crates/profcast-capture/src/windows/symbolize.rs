@@ -18,13 +18,13 @@ use std::mem;
 use std::ptr;
 use std::time::{Duration, Instant};
 
-use profcast_core::{ProfcastError, Result};
 use profcast_core::model::Frame;
+use profcast_core::{ProfcastError, Result};
 
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::System::Diagnostics::Debug::{
-    IMAGEHLP_LINE64, IMAGEHLP_MODULE64, SYMBOL_INFO, SymCleanup, SymFromAddr,
-    SymGetLineFromAddr64, SymGetModuleInfo64, SymInitialize, SymRefreshModuleList, SymSetOptions,
+    IMAGEHLP_LINE64, IMAGEHLP_MODULE64, SYMBOL_INFO, SymCleanup, SymFromAddr, SymGetLineFromAddr64,
+    SymGetModuleInfo64, SymInitialize, SymRefreshModuleList, SymSetOptions,
 };
 
 // `SymSetOptions` flags, declared locally to stay independent of which
@@ -79,7 +79,9 @@ impl Symbolizer {
         // SAFETY: setting global DbgHelp options has no preconditions.
         unsafe {
             SymSetOptions(
-                SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES
+                SYMOPT_UNDNAME
+                    | SYMOPT_DEFERRED_LOADS
+                    | SYMOPT_LOAD_LINES
                     | SYMOPT_FAIL_CRITICAL_ERRORS,
             );
         }
@@ -179,8 +181,9 @@ impl Symbolizer {
         }
         // SAFETY: `Name` begins the trailing name buffer, contiguous with
         // `_name`; `len` bytes were written there and stay within the struct.
-        let bytes =
-            unsafe { std::slice::from_raw_parts(ptr::addr_of!(buffer.info.Name).cast::<u8>(), len) };
+        let bytes = unsafe {
+            std::slice::from_raw_parts(ptr::addr_of!(buffer.info.Name).cast::<u8>(), len)
+        };
         Some(String::from_utf8_lossy(bytes).into_owned())
     }
 
@@ -238,7 +241,12 @@ impl Drop for Symbolizer {
 /// `CHAR` is signed in the bindings, so the bytes are reinterpreted as `u8`.
 fn c_str_from_array(buf: &[i8]) -> String {
     let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-    let bytes: Vec<u8> = buf.get(..end).unwrap_or(buf).iter().map(|&b| b as u8).collect();
+    let bytes: Vec<u8> = buf
+        .get(..end)
+        .unwrap_or(buf)
+        .iter()
+        .map(|&b| b as u8)
+        .collect();
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
