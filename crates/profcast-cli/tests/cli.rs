@@ -235,6 +235,26 @@ fn unknown_output_format_fails() {
 }
 
 #[test]
+fn formats_lists_read_and_write_capabilities() {
+    let output = Command::new(BIN)
+        .args(["formats"])
+        .output()
+        .expect("failed to run profcast");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // folded is both readable and writable; json/speedscope are output-only.
+    assert!(stdout.contains("RW  folded"));
+    assert!(stdout.contains(".W  json"));
+    assert!(stdout.contains(".W  speedscope"));
+    // Extensions that select a format are listed alongside it.
+    assert!(stdout.contains(".collapsed"));
+}
+
+#[test]
 fn undetectable_input_fails_with_hint() {
     let output = run_with_stdin(&["dump", "-"], b"this is not a profile at all\n");
     assert!(!output.status.success());

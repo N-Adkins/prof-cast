@@ -68,6 +68,12 @@ The input format is auto-detected, or set explicitly with `--from`. Use `-` as
 the input or output path to read from stdin or write to stdout. Pass `-v` for
 more verbose logging.
 
+List the formats profcast can read (`R`) and write (`W`):
+
+```sh
+profcast formats
+```
+
 Capture a running process and write the result in any output format (Linux):
 
 ```sh
