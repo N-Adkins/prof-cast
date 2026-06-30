@@ -42,6 +42,35 @@ struct Load {
     vaddr: u64,
 }
 
+/// A snapshot of a process's executable, file-backed memory map. Must be taken
+/// while the process is alive: once it exits, `/proc/<pid>/maps` is torn down
+/// and yields nothing.
+pub(super) struct Maps(Vec<MapEntry>);
+
+impl Maps {
+    /// Reads the executable, file-backed regions from `/proc/<pid>/maps`
+    /// (`pid == 0` resolves to `self`). A vanished or unreadable process yields
+    /// an empty snapshot.
+    #[must_use]
+    pub(super) fn snapshot(pid: u32) -> Self {
+        let which = if pid == 0 {
+            "self".to_owned()
+        } else {
+            pid.to_string()
+        };
+        let entries = fs::read_to_string(format!("/proc/{which}/maps"))
+            .map(|text| parse_maps(&text))
+            .unwrap_or_default();
+        Self(entries)
+    }
+
+    /// Whether the snapshot holds no regions (e.g. the process has exited).
+    #[must_use]
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 /// Resolves instruction pointers for a single profiled process, caching parsed
 /// binaries so each is read at most once.
 pub(super) struct Symbolizer {
@@ -50,20 +79,11 @@ pub(super) struct Symbolizer {
 }
 
 impl Symbolizer {
-    /// Builds a symbolizer from the process's memory map. `pid == 0` resolves to
-    /// `self`.
+    /// Builds a symbolizer from a previously captured memory-map snapshot.
     #[must_use]
-    pub(super) fn new(pid: u32) -> Self {
-        let which = if pid == 0 {
-            "self".to_owned()
-        } else {
-            pid.to_string()
-        };
-        let maps = fs::read_to_string(format!("/proc/{which}/maps"))
-            .map(|text| parse_maps(&text))
-            .unwrap_or_default();
+    pub(super) fn new(maps: Maps) -> Self {
         Self {
-            maps,
+            maps: maps.0,
             modules: HashMap::new(),
         }
     }

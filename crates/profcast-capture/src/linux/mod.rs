@@ -22,7 +22,7 @@ use profcast_core::{
 
 use launch::Launched;
 use perf::Counter;
-use symbolize::Symbolizer;
+use symbolize::{Maps, Symbolizer};
 
 /// Default sampling window when the caller does not specify a duration and the
 /// target is not a separate process we can wait on.
@@ -109,17 +109,18 @@ impl Source for PerfSource {
             None => Instant::now().checked_add(DEFAULT_DURATION),
         };
 
-        let counts = sample_loop(&counters, deadline, || {
+        let (counts, maps) = sample_loop(&counters, deadline, pid, || {
             launched.as_mut().map_or_else(
                 || wait_for_exit && !process_is_alive(pid),
                 Launched::has_exited,
             )
         });
 
-        // Build the profile while the (now-resolved) target's maps are still
-        // readable; `launched` is dropped afterwards, reaping the child.
+        // The maps were snapshotted live during sampling; the target may now be
+        // gone (`launched` is dropped afterwards, reaping the child), but its
+        // on-disk binaries persist and are read lazily during symbolization.
         tracing::info!(stacks = counts.len(), "sampling stopped");
-        build_profile(pid, &counts)
+        build_profile(maps, &counts)
     }
 }
 
@@ -144,17 +145,29 @@ fn open_counters(pid: u32, frequency_hz: u32, enable_on_exec: bool) -> Result<Ve
 
 /// Drains the counters every [`DRAIN_INTERVAL`] until `deadline` passes or
 /// `is_done` reports the target has finished, then disables and drains a final
-/// time. Returns leaf-first call-chains aggregated to sample counts.
+/// time. Returns leaf-first call-chains aggregated to sample counts, plus the
+/// most recent non-empty snapshot of the target's memory map.
+///
+/// The maps are re-read each tick and the latest non-empty one is retained:
+/// they must be captured while the target is alive, since `/proc/<pid>/maps`
+/// is torn down the moment it exits (which, for a launched command, is the very
+/// condition that ends this loop).
 fn sample_loop(
     counters: &[Counter],
     deadline: Option<Instant>,
+    pid: u32,
     mut is_done: impl FnMut() -> bool,
-) -> HashMap<Vec<u64>, i64> {
+) -> (HashMap<Vec<u64>, i64>, Maps) {
     let mut counts: HashMap<Vec<u64>, i64> = HashMap::new();
+    let mut maps = Maps::snapshot(pid);
     loop {
         thread::sleep(DRAIN_INTERVAL);
         for counter in counters {
             counter.drain(|ips| record_sample(&mut counts, ips));
+        }
+        let fresh = Maps::snapshot(pid);
+        if !fresh.is_empty() {
+            maps = fresh;
         }
         if deadline.is_some_and(|d| Instant::now() >= d) {
             break;
@@ -173,7 +186,7 @@ fn sample_loop(
     for counter in counters {
         counter.drain(|ips| record_sample(&mut counts, ips));
     }
-    counts
+    (counts, maps)
 }
 
 /// Accumulates one leaf-first call-chain into the aggregated sample counts.
@@ -210,10 +223,8 @@ fn process_is_alive(pid: u32) -> bool {
 
 /// Folds aggregated, leaf-first call-chains into a [`Profile`], symbolizing and
 /// interning frames. Stacks are reversed to the model's root-first order.
-fn build_profile(pid: u32, counts: &HashMap<Vec<u64>, i64>) -> Result<Profile> {
-    // For Target::Current, std::process::id() is our own pid; the symbolizer
-    // treats it like any other /proc entry.
-    let mut symbolizer = Symbolizer::new(pid);
+fn build_profile(maps: Maps, counts: &HashMap<Vec<u64>, i64>) -> Result<Profile> {
+    let mut symbolizer = Symbolizer::new(maps);
 
     let mut frames: Vec<Frame> = Vec::new();
     let mut frame_ids: HashMap<u64, FrameId> = HashMap::new();
