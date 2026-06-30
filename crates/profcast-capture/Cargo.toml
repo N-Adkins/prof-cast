@@ -24,3 +24,8 @@ profcast-core = { path = "../profcast-core" }
 [target.'cfg(target_os = "linux")'.dependencies]
 libc.workspace = true
 object.workspace = true
+
+# The Windows backend drives DbgHelp / Tool Help / thread suspension through
+# the raw Win32 bindings; gated so non-Windows builds never pull it in.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys.workspace = true

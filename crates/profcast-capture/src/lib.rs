@@ -6,6 +6,10 @@
 
 #[cfg(target_os = "linux")]
 pub mod linux;
+// The Windows backend reads x86-64 register contexts directly, so it is gated to
+// that architecture; other Windows targets simply register no backend.
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+pub mod windows;
 
 pub use profcast_core::capture::{CaptureSpec, Source, Target};
 
@@ -33,6 +37,8 @@ impl Sources {
         let mut sources = Self::new();
         #[cfg(target_os = "linux")]
         sources.register(Box::new(linux::PerfSource::new()));
+        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+        sources.register(Box::new(windows::SamplingSource::new()));
         sources
     }
 

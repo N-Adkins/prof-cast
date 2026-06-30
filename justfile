@@ -74,6 +74,10 @@ install:
 uninstall:
     cargo uninstall profcast-cli
 
+# Build the native example workloads (see examples/justfile)
+build-examples:
+    cd examples && just build
+
 # Install the nightly toolchain and Miri
 miri-setup:
     rustup toolchain install nightly --profile minimal --component miri
