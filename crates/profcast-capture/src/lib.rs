@@ -34,6 +34,10 @@ impl Sources {
     /// before using one.
     #[must_use]
     pub fn with_builtins() -> Self {
+        // Allows unused mut because it errors on unsupported platforms currently,
+        // rather than just silently compiling but not working with a proper
+        // error about why, like it should.
+        #[allow(unused_mut)]
         let mut sources = Self::new();
         #[cfg(target_os = "linux")]
         sources.register(Box::new(linux::PerfSource::new()));
